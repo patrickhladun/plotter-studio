@@ -75,16 +75,23 @@ install_axidraw_stack() {
   fi
 
   echo "[setup] Skipping optional axi Python helper"
-  echo "        (install it manually later if you need the legacy CLI wrappers)"
 }
 
 APP_DIR=${APP_DIR:-"$HOME/plotter-studio"}
-REPO_URL=${REPO_URL:-"https://github.com/patrickhladun/plotter-studio.git"}
 REPO_REF=${REPO_REF:-"main"}
 BIN_DIR=${BIN_DIR:-"$HOME/.local/bin"}
 ENV_FILE="$APP_DIR/.env"
 CERTS_DIR="$APP_DIR/certs"
 TLS_ENABLED=${PLOTTERSTUDIO_ENABLE_TLS:-${SYNTHDRAW_ENABLE_TLS:-0}}
+
+# Auto-detect best repo URL (SSH if available, else HTTPS)
+if [ -f "$HOME/.ssh/id_ed25519" ] || [ -f "$HOME/.ssh/id_rsa" ]; then
+  REPO_URL="git@github.com:patrickhladun/plotter-studio.git"
+  echo "[setup] Using SSH for cloning"
+else
+  REPO_URL="https://github.com/patrickhladun/plotter-studio.git"
+  echo "[setup] Using HTTPS for cloning (read-only)"
+fi
 
 echo "[setup] Installing Plotter Studio into $APP_DIR"
 
@@ -98,10 +105,9 @@ if [ -d "$APP_DIR/.git" ]; then
   git -C "$APP_DIR" checkout "$REPO_REF"
   git -C "$APP_DIR" reset --hard "origin/$REPO_REF"
 else
-  echo "[setup] Cloning repository from $REPO_URL"
+  echo "[setup] Cloning repository non-interactively"
   rm -rf "$APP_DIR"
-  git clone "$REPO_URL" "$APP_DIR"
-  git -C "$APP_DIR" checkout "$REPO_REF"
+  git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$APP_DIR"
 fi
 
 cd "$APP_DIR"
@@ -140,17 +146,12 @@ cp -R apps/dashboard/dist/. "$FRONTEND_TARGET/"
 add_env_line "PLOTTERSTUDIO_FRONTEND_DIST" "$FRONTEND_TARGET"
 add_env_line "SYNTHDRAW_FRONTEND_DIST" "$FRONTEND_TARGET"
 
-# also stage the bundle inside the installed package so the default path works
 PACKAGE_FRONTEND_DIR=$(python - <<'PY'
 import importlib.util
 from pathlib import Path
-
 spec = importlib.util.find_spec("main")
-if not spec or not spec.origin:
-    print()
-else:
-    package_dir = Path(spec.origin).resolve().parent
-    print(package_dir / "frontend")
+if spec and spec.origin:
+    print(Path(spec.origin).resolve().parent / "frontend")
 PY
 )
 
