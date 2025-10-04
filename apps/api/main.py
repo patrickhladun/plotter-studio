@@ -10,6 +10,7 @@ import tempfile
 import threading
 import time
 import xml.etree.ElementTree as ET
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional, Sequence
@@ -39,6 +40,7 @@ JOB = {
     "start_time": None,
     "end_time": None,
     "distance_mm": None,
+    "error": None,
 }
 FRONTEND_DIST = Path(
     os.getenv("PLOTTERSTUDIO_FRONTEND_DIST")
@@ -56,6 +58,10 @@ DATA_DIR = Path(
     or DEFAULT_HOME / "uploads"
 )
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _format_command(parts: Sequence[str]) -> str:
+    return " ".join(shlex.quote(str(part)) for part in parts)
 
 
 def _sanitize_filename(name: str) -> str:
@@ -205,11 +211,15 @@ def _watch_plot_progress(proc: subprocess.Popen[str]) -> None:
     if proc.stdout is None:
         return
 
+    log_lines: deque[str] = deque(maxlen=200)
+
     try:
         for raw_line in proc.stdout:
             line = raw_line.strip()
             if not line:
                 continue
+            log_lines.append(line)
+            logger.debug("nextdraw: %s", line)
             match = PROGRESS_RE.search(line)
             if match:
                 try:
@@ -253,8 +263,11 @@ def _watch_plot_progress(proc: subprocess.Popen[str]) -> None:
             JOB["end_time"] = time.time()
             if proc.returncode == 0:
                 JOB["progress"] = 100.0
+                JOB["error"] = None
             else:
                 JOB["progress"] = None
+                output_text = "\n".join(log_lines).strip()
+                JOB["error"] = output_text or f"nextdraw exited with code {proc.returncode}"
 
 
 def _ensure_viewbox(root: ET.Element) -> tuple[float, float, float, float]:
@@ -462,6 +475,7 @@ def _preview_via_nextdraw(
     if brushless:
         args.extend(["--penlift", "3"])
 
+    logger.debug("Running nextdraw preview: %s", _format_command(args))
     try:
         proc = subprocess.run(args, capture_output=True, text=True, timeout=60)
     except FileNotFoundError:
@@ -471,6 +485,7 @@ def _preview_via_nextdraw(
         return None, None
 
     output = "\n".join(filter(None, [proc.stdout, proc.stderr]))
+    output_text = output.strip()
     time_match = re.search(r"Estimated print time:\s*([0-9:]+)", output)
     distance_match = re.search(r"draw:\s*([0-9.]+)\s*mm", output, re.IGNORECASE)
 
@@ -496,7 +511,14 @@ def _preview_via_nextdraw(
             est_distance = None
 
     if proc.returncode != 0 and est_seconds is None and est_distance is None:
-        logger.warning("nextdraw preview failed with code %s", proc.returncode)
+        if output_text:
+            logger.warning(
+                "nextdraw preview failed with code %s: %s",
+                proc.returncode,
+                output_text,
+            )
+        else:
+            logger.warning("nextdraw preview failed with code %s", proc.returncode)
 
     return est_seconds, est_distance
 
@@ -702,6 +724,8 @@ def _start_plot_from_path(
     if not svg_source.exists():
         raise HTTPException(status_code=404, detail="SVG not found")
 
+    JOB["error"] = None
+
     temp_dir = Path(tempfile.mkdtemp(prefix="plotterstudio_plot_"))
     target_name = _sanitize_filename(original_name or svg_source.name)
     working_src = temp_dir / target_name
@@ -754,6 +778,9 @@ def _start_plot_from_path(
     if brushless:
         cmd.extend(["--penlift", "3"])
 
+    cmd_str = _format_command(cmd)
+    logger.info("Launching nextdraw: %s", cmd_str)
+
     proc = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -773,6 +800,38 @@ def _start_plot_from_path(
         JOB["distance_mm"] = _estimate_distance_mm(use_path)
     JOB["elapsed_override"] = None
 
+    # If the process exits immediately, capture output and respond with the failure.
+    time.sleep(0.2)
+    returncode = proc.poll()
+    if returncode is not None:
+        stdout_data, _ = proc.communicate()
+        output_text = (stdout_data or "").strip()
+        JOB["proc"] = None
+        JOB["end_time"] = time.time()
+        JOB["elapsed_override"] = None
+        if returncode == 0:
+            JOB["progress"] = 100.0
+            JOB["error"] = None
+            logger.info("nextdraw completed immediately with code 0")
+            return {
+                "ok": True,
+                "pid": proc.pid,
+                "file": JOB["file"],
+                "cmd": cmd_str,
+                "page": page_flag,
+                "completed": True,
+                "output": output_text,
+            }
+
+        JOB["progress"] = None
+        JOB["error"] = output_text or f"nextdraw exited with code {returncode}"
+        logger.error(
+            "nextdraw exited immediately with code %s: %s",
+            returncode,
+            output_text,
+        )
+        raise HTTPException(status_code=500, detail=JOB["error"])
+
     if proc.stdout is not None:
         threading.Thread(target=_watch_plot_progress, args=(proc,), daemon=True).start()
 
@@ -780,7 +839,7 @@ def _start_plot_from_path(
         "ok": True,
         "pid": proc.pid,
         "file": JOB["file"],
-        "cmd": " ".join(cmd),
+        "cmd": cmd_str,
         "page": page_flag,
     }
 
@@ -947,6 +1006,7 @@ def status():
         "progress": progress,
         "elapsed_seconds": elapsed,
         "distance_mm": distance_mm,
+        "error": JOB.get("error"),
     }
 
 
@@ -1001,6 +1061,7 @@ def cancel():
     JOB["progress"] = None
     JOB["end_time"] = time.time()
     JOB["elapsed_override"] = None
+    JOB["error"] = None
     return {"ok": True, "message": "Canceled"}
 
 

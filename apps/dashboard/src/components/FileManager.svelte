@@ -226,7 +226,7 @@
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            DEFAULT_PAGE,
+            page: DEFAULT_PAGE,
             s_down: 30,
             s_up: 70,
             p_down: 40,
@@ -256,11 +256,33 @@
       }
 
       let pid: number | undefined;
+      let payload: Record<string, unknown> | null = null;
       try {
-        const payload = text ? JSON.parse(text) : null;
-        pid = payload?.pid;
+        payload = text ? JSON.parse(text) : null;
       } catch (parseError) {
-        pid = undefined;
+        payload = null;
+      }
+
+      if (payload && typeof payload.pid === 'number') {
+        pid = payload.pid;
+      }
+
+      const completed = Boolean(payload?.completed);
+      const rawOutput = payload?.output;
+      const outputSummary = typeof rawOutput === 'string'
+        ? (() => {
+            const snippet = rawOutput.trim().split('\n')[0]?.trim();
+            return snippet ? ` (${snippet})` : '';
+          })()
+        : '';
+
+      if (completed) {
+        setStatus(`Plot completed immediately for ${selectedFile}${outputSummary}`, 'success');
+        plotRunning = false;
+        plotProgress = 100;
+        plotElapsedSeconds = 0;
+        pollStatus();
+        return;
       }
 
       const pidLabel = pid ? ` (pid ${pid})` : '';
@@ -425,6 +447,13 @@
       plotDistanceMm = typeof rawDistance === 'number' ? rawDistance : plotDistanceMm;
       if (!plotRunning && plotDistanceMm == null && previewDistanceMm != null) {
         plotDistanceMm = previewDistanceMm;
+      }
+      const errorMessage = typeof data?.error === 'string' ? data.error : null;
+      if (errorMessage && statusMessage !== errorMessage) {
+        setStatus(errorMessage, 'error');
+        plotRunning = false;
+        plotProgress = null;
+        plotElapsedSeconds = null;
       }
     } catch (error) {
       // ignore status polling errors
