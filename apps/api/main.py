@@ -9,18 +9,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from version import __version__
-from apps.api.routes import svg, plot
+from routes import svg, plot
 from core.state import DATA_DIR
 
 
-# Detect and adjust path dynamically for both dev and installed runs
 CURRENT_DIR = Path(__file__).resolve().parent
 PARENT_DIR = CURRENT_DIR.parent
 PROJECT_ROOT = PARENT_DIR.parent
 
-# In dev: /plotter-studio/software/apps/api/
-# In prod: /plotter-studio/apps/api/ (after install)
-# Ensure both `core` and `routes` are importable
 if (CURRENT_DIR / "core").exists():
     sys.path.insert(0, str(CURRENT_DIR))
 elif (PARENT_DIR / "core").exists():
