@@ -1,0 +1,16 @@
+{
+  "name": "plotter-studio",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev:dashboard": "pnpm --filter dashboard dev",
+    "build:dashboard": "pnpm --filter dashboard build",
+    "preview:dashboard": "pnpm --filter dashboard preview",
+    "lint:dashboard": "pnpm --filter dashboard lint",
+    "dev": "bash -c 'source venv/bin/activate 2>/dev/null || source .venv/bin/activate; uvicorn main:app --app-dir apps/api --reload --host 0.0.0.0 --port 2222 & API_PID=$!; trap \"kill $API_PID\" EXIT; pnpm --filter dashboard dev'"
+  },
+  "dependencies": {
+    "@types/node": "^24.6.2"
+  }
+}

@@ -1,0 +1,10 @@
+node_modules
+.DS_Store
+dist
+build
+.vite
+.venv
+
+# Generated frontend bundle
+apps/api/frontend
+temp/

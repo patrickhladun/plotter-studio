@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plotterstudio"
+version = "0.1.0"
+description = "Plotter Studio API"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi==0.118.0",
+  "python-multipart==0.0.20",
+  "uvicorn==0.37.0",
+  "svgpathtools==1.6.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/patrickhladun/plotter-studio"
+
+[project.scripts]
+plotterstudio = "main:cli"
+
+[tool.setuptools]
+py-modules = ["main", "version"]

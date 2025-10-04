@@ -1,0 +1,17 @@
+[Unit]
+Description=Plotter Studio server (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i/plotter-studio
+Environment=PATH=/home/%i/plotter-studio/venv/bin
+EnvironmentFile=-/home/%i/plotter-studio/.env
+ExecStart=/home/%i/plotter-studio/venv/bin/plotterstudio --host 0.0.0.0 --port 2222
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
