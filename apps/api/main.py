@@ -1,8 +1,23 @@
 import logging
-import os, sys
+import os
+import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+# ============================================================
+# Dynamic Path Fix — must be BEFORE any local imports
+# ============================================================
+CURRENT_DIR = Path(__file__).resolve().parent
+PARENT_DIR = CURRENT_DIR.parent
+
+# Add both /api and /api/parent to sys.path so routes/core are visible
+for path in [CURRENT_DIR, PARENT_DIR]:
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
+
+# ============================================================
+# Now safe to import local modules
+# ============================================================
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -13,17 +28,9 @@ from routes import svg, plot
 from core.state import DATA_DIR
 
 
-# Adjust import path dynamically for local dev and installed package
-CURRENT_DIR = Path(__file__).resolve().parent
-PARENT_DIR = CURRENT_DIR.parent
-
-# Ensure local routes/core can be imported even when installed via pip
-if str(CURRENT_DIR) not in sys.path:
-    sys.path.insert(0, str(CURRENT_DIR))
-if str(PARENT_DIR) not in sys.path:
-    sys.path.insert(0, str(PARENT_DIR))
-
-
+# ============================================================
+# Logging Setup
+# ============================================================
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -34,8 +41,9 @@ logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 logger = logging.getLogger("plotterstudio.api")
 
+
 # ============================================================
-# SVG Namespace & App Setup
+# SVG Namespace & FastAPI App Setup
 # ============================================================
 ET.register_namespace("", "http://www.w3.org/2000/svg")
 ET.register_namespace("xlink", "http://www.w3.org/1999/xlink")
@@ -66,6 +74,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _configure_frontend(app: FastAPI) -> None:
+    """Serve built dashboard files if present."""
     if not FRONTEND_DIST.exists():
         logger.warning("Frontend bundle directory not found at %s", FRONTEND_DIST)
         return
@@ -91,6 +100,9 @@ def _configure_frontend(app: FastAPI) -> None:
         return FileResponse(index_file)
 
 
+# ============================================================
+# CORS + Routes
+# ============================================================
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:2121"],
@@ -103,6 +115,9 @@ app.include_router(svg.router)
 app.include_router(plot.router)
 
 
+# ============================================================
+# Core Endpoints
+# ============================================================
 @app.get("/status")
 def status():
     logger.info("Status endpoint called.")
@@ -114,6 +129,9 @@ def version():
     return {"version": __version__}
 
 
+# ============================================================
+# Frontend & Init Logging
+# ============================================================
 _configure_frontend(app)
 
 logger.info("Plotter Studio API initialized.")
