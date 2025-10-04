@@ -13,16 +13,15 @@ from routes import svg, plot
 from core.state import DATA_DIR
 
 
+# Adjust import path dynamically for local dev and installed package
 CURRENT_DIR = Path(__file__).resolve().parent
 PARENT_DIR = CURRENT_DIR.parent
-PROJECT_ROOT = PARENT_DIR.parent
 
-if (CURRENT_DIR / "core").exists():
+# Ensure local routes/core can be imported even when installed via pip
+if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
-elif (PARENT_DIR / "core").exists():
+if str(PARENT_DIR) not in sys.path:
     sys.path.insert(0, str(PARENT_DIR))
-else:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 
 logging.basicConfig(
