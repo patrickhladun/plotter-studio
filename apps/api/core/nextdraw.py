@@ -1,3 +1,29 @@
+import os
+import re
+import shlex
+import shutil
+import subprocess 
+import tempfile
+import threading
+import time
+import logging
+from collections import deque
+from pathlib import Path
+from typing import Any, Optional, Sequence
+from fastapi import HTTPException
+
+from core.state import JOB
+
+logger = logging.getLogger("plotterstudio.api")
+
+
+def _format_command(args):
+    """Return a clean string version of the nextdraw command."""
+    if isinstance(args, (list, tuple)):
+        return " ".join(str(a) for a in args)
+    return str(args)
+
+
 def _nextdraw_base() -> list[str]:
     value = (
         os.getenv("PLOTTERSTUDIO_NEXTDRAW")
@@ -40,7 +66,7 @@ def _run_utility(command: str, extra_args: Optional[Sequence[str]] = None) -> su
     args = [*_nextdraw_base(), "-m", "utility", "-M", command]
     if extra_args:
         args.extend(str(item) for item in extra_args)
-    logger.info("Running nextdraw utility command: %s", _format_command(args))
+    logger.info("Running nextdraw cli command: %s", _format_command(args))
     try:
         return subprocess.run(
             args,
@@ -435,7 +461,6 @@ def _ensure_motors_enabled() -> None:
     _manual_response("motors enabled", _run_utility("enable_xy"))
 
 
-
 def _parse_length_to_mm(value: str | None) -> float | None:
     if value is None:
         return None
@@ -476,14 +501,6 @@ def _parse_length_to_mm(value: str | None) -> float | None:
         return None
 
     return numeric * factor
-
-
-def _svg_namespace(tag: str) -> str:
-    if tag.startswith("{"):
-        return tag.split("}", 1)[0] + "}"
-    return ""
-
-
 
 
 __all__ = [

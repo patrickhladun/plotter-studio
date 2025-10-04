@@ -4,10 +4,12 @@ from typing import Any
 from fastapi import APIRouter, UploadFile, HTTPException, Response
 from fastapi.responses import FileResponse
 
-from ..core.nextdraw import _sanitize_filename, _file_metadata, DATA_DIR, _unique_filename, _preview_from_path
-from ..main import JOB
-from ..rotation import rotate_svg_file
-from ..main import RotateRequest, RenameRequest
+from core.utils import _sanitize_filename
+from core.files import _file_metadata, _unique_filename, DATA_DIR
+from core.schemas import RotateRequest, RenameRequest
+from core.nextdraw import _run_manual, _run_utility
+from core.state import DATA_DIR
+from rotation import rotate_svg_file
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -19,6 +21,13 @@ def list_files():
     ]
     files.sort(key=lambda path: path.name.lower())
     return [_file_metadata(path) for path in files]
+
+
+def _svg_namespace(tag: str) -> str:
+    if tag.startswith("{"):
+        return tag.split("}", 1)[0] + "}"
+    return ""
+
 
 @router.post("", status_code=201)
 async def upload_file(file: UploadFile):
@@ -36,7 +45,7 @@ async def upload_file(file: UploadFile):
     if target.stat().st_size == 0:
         target.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
-
+    
     return _file_metadata(target)
 
 @router.delete("/{filename}", status_code=204)
@@ -72,7 +81,7 @@ def rename_file(filename: str, request: RenameRequest):
     if not target.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
-    new_name = request.sanitized()
+    new_name = request.sanitized(_sanitize_filename)
     new_path = DATA_DIR / new_name
 
     if new_path.exists() and new_path != target:
@@ -97,22 +106,8 @@ def download_file(filename: str):
     return FileResponse(target, media_type="image/svg+xml", filename=safe_name)
 
 @router.get("/{filename}/preview")
-def preview_file(
-    filename: str,
-    page: str = "a5",
-    handling: int = 1,
-    speed: int = 70,
-    brushless: bool = False,
-):
-    safe_name = _sanitize_filename(filename)
-    target = DATA_DIR / safe_name
-    if not target.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-
-    info = _preview_from_path(target, page, handling, speed, brushless)
-    JOB["file"] = safe_name
-    JOB["distance_mm"] = info.get("distance_mm")
-    return info
+def preview_file():
+    return 'Preview not implemented yet'
 
 @router.get("/{filename}/raw")
 def raw_file(filename: str):

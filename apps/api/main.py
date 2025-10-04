@@ -2,33 +2,38 @@ import logging
 import os
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any, Optional, Sequence
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from version import __version__
 
+from version import __version__
 from routes import svg, plot
+
+from core.state import DATA_DIR
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+
+logging.getLogger("uvicorn").setLevel(logging.WARNING)
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 logger = logging.getLogger("plotterstudio.api")
 
+# ============================================================
+# SVG Namespace & App Setup
+# ============================================================
 ET.register_namespace("", "http://www.w3.org/2000/svg")
 ET.register_namespace("xlink", "http://www.w3.org/1999/xlink")
 
 app = FastAPI(title="Plotter Studio", version=__version__)
 
-# Shared state for jobs
-JOB = {
-    "proc": None,
-    "file": None,
-    "progress": None,
-    "start_time": None,
-    "end_time": None,
-    "distance_mm": None,
-    "error": None,
-}
+# ============================================================
+
 
 FRONTEND_DIST = Path(
     os.getenv("PLOTTERSTUDIO_FRONTEND_DIST")
@@ -76,31 +81,22 @@ def _configure_frontend(app: FastAPI) -> None:
         return FileResponse(index_file)
 
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "https://plotterstudio.netlify.app",
-        "https://plotterstudio.com",
-    ],
+    allow_origins=["http://localhost:2121"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Routers
 app.include_router(svg.router)
 app.include_router(plot.router)
 
 
 @app.get("/status")
 def status():
-    return {
-        "status": "to be coded"
-    }
+    logger.info("Status endpoint called.")
+    return {"status": "ok"}
 
 
 @app.get("/version")
@@ -109,3 +105,7 @@ def version():
 
 
 _configure_frontend(app)
+
+logger.info("Plotter Studio API initialized.")
+logger.info(f"Frontend path: {FRONTEND_DIST}")
+logger.info(f"Data directory: {DATA_DIR}")

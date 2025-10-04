@@ -1,20 +1,21 @@
 import os
 import tempfile
 import time
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException, UploadFile
 
-from ..core.nextdraw import (
+from core.nextdraw import (
     _run_manual,
     _run_utility,
     _start_plot_from_path,
     _manual_response,
-    _ensure_motors_enabled,
 )
-from ..main import JOB, PlotRequest
+from core.state import JOB
 
 router = APIRouter(prefix="/plot", tags=["plot"])
+logger = logging.getLogger("plotterstudio.api")
 
 @router.post("")
 async def plot(
@@ -115,5 +116,6 @@ def disable_motors():
 
 @router.post("/pen/toggle")
 def pen_toggle():
-    result = _run_utility("toggle")
+    command = ["toggle"]
+    result = _run_utility(*command)
     return _manual_response("pen toggled", result, error_on_failure=False)

@@ -34,7 +34,7 @@
     clearStatus();
     try {
       penBusy = true;
-      const response = await fetch(`${API_BASE_URL}/pen/toggle`, { method: 'POST' });
+      const response = await fetch(`${API_BASE_URL}/plot/pen/toggle`, { method: 'POST' });
       const text = await response.text();
       let payload: CommandPayload | null = null;
       try {
