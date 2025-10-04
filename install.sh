@@ -123,8 +123,8 @@ add_env_line "SYNTHDRAW_ENV_FILE" "$ENV_FILE"
 add_env_line "SYNTHDRAW_HOST" "0.0.0.0"
 add_env_line "SYNTHDRAW_PORT" "2222"
 
-pnpm install --filter dashboard --prod=false
-pnpm --filter dashboard build
+pnpm install --filter "plotter-studio-dashboard..." --prod=false
+pnpm --filter "plotter-studio-dashboard..." build
 
 FRONTEND_TARGET="$APP_DIR/apps/api/frontend"
 rm -rf "$FRONTEND_TARGET"
