@@ -17,7 +17,7 @@ add_env_line() {
 
 ensure_packages() {
   if command_exists apt-get; then
-    sudo apt-get update
+    sudo apt-get update -y
     sudo apt-get install -y python3 python3-venv python3-pip git curl build-essential
   fi
 }
@@ -30,11 +30,6 @@ install_node() {
     if [ "$current_major" -ge "$required_major" ]; then
       return
     fi
-  fi
-
-  if ! command_exists curl; then
-    echo "[error] curl not available; install curl and rerun" >&2
-    exit 1
   fi
 
   echo "[setup] Installing Node.js (v20.x) via NodeSource"
@@ -73,8 +68,6 @@ install_axidraw_stack() {
     echo "[error] Failed to install Axidraw CLI (zip, PyPI, and GitHub all failed)." >&2
     return 1
   fi
-
-  echo "[setup] Skipping optional axi Python helper"
 }
 
 APP_DIR=${APP_DIR:-"$HOME/plotter-studio"}
@@ -84,7 +77,7 @@ ENV_FILE="$APP_DIR/.env"
 CERTS_DIR="$APP_DIR/certs"
 TLS_ENABLED=${PLOTTERSTUDIO_ENABLE_TLS:-${SYNTHDRAW_ENABLE_TLS:-0}}
 
-# Auto-detect best repo URL (SSH if available, else HTTPS)
+# --- Auto-select HTTPS or SSH for GitHub clone ---
 if [ -f "$HOME/.ssh/id_ed25519" ] || [ -f "$HOME/.ssh/id_rsa" ]; then
   REPO_URL="git@github.com:patrickhladun/plotter-studio.git"
   echo "[setup] Using SSH for cloning"
@@ -99,15 +92,19 @@ ensure_packages
 install_node
 install_pnpm
 
+# --- Clone or update repository non-interactively ---
 if [ -d "$APP_DIR/.git" ]; then
   echo "[setup] Repository already present; pulling latest changes"
-  git -C "$APP_DIR" fetch origin "$REPO_REF"
+  git -C "$APP_DIR" fetch origin "$REPO_REF" --depth=1
   git -C "$APP_DIR" checkout "$REPO_REF"
   git -C "$APP_DIR" reset --hard "origin/$REPO_REF"
 else
   echo "[setup] Cloning repository non-interactively"
   rm -rf "$APP_DIR"
-  git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$APP_DIR"
+  GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$APP_DIR" || {
+    echo "[error] Failed to clone repository non-interactively" >&2
+    exit 1
+  }
 fi
 
 cd "$APP_DIR"
