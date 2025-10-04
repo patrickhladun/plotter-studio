@@ -456,9 +456,6 @@ def _preview_via_nextdraw(
 ) -> tuple[Optional[float], Optional[float]]:
     args: list[str] = [*_nextdraw_base(), str(svg_path), "--preview", "--report_time"]
 
-    if page:
-        args.extend(["--page", page])
-
     model = (
         os.getenv("PLOTTERSTUDIO_MODEL")
         or os.getenv("PLOTTERSTUDIO_MODEL_NAME")
