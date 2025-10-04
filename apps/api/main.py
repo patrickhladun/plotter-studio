@@ -9,8 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from version import __version__
-from routes import svg, plot
-
+from apps.api.routes import svg, plot
 from core.state import DATA_DIR
 
 
