@@ -807,18 +807,34 @@ def _start_plot_from_path(
         JOB["end_time"] = time.time()
         JOB["elapsed_override"] = None
         if returncode == 0:
+            suspicious = output_text.lower()
+            if output_text and (
+                "error" in suspicious
+                or "no nextdraw" in suspicious
+                or "no devices" in suspicious
+            ):
+                JOB["progress"] = None
+                JOB["error"] = output_text
+                logger.error(
+                    "nextdraw reported an error despite exit code 0: %s",
+                    output_text,
+                )
+                raise HTTPException(status_code=500, detail=output_text)
+
             JOB["progress"] = 100.0
             JOB["error"] = None
-            logger.info("nextdraw completed immediately with code 0")
-            return {
+            logger.info("nextdraw completed immediately with code 0%s", " (no output)" if not output_text else "")
+            response: dict[str, Any] = {
                 "ok": True,
                 "pid": proc.pid,
                 "file": JOB["file"],
                 "cmd": cmd_str,
                 "page": page_flag,
                 "completed": True,
-                "output": output_text,
             }
+            if output_text:
+                response["output"] = output_text
+            return response
 
         JOB["progress"] = None
         JOB["error"] = output_text or f"nextdraw exited with code {returncode}"

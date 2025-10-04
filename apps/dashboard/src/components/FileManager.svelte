@@ -269,15 +269,26 @@
 
       const completed = Boolean(payload?.completed);
       const rawOutput = payload?.output;
-      const outputSummary = typeof rawOutput === 'string'
+      const outputSnippet = typeof rawOutput === 'string'
         ? (() => {
-            const snippet = rawOutput.trim().split('\n')[0]?.trim();
-            return snippet ? ` (${snippet})` : '';
+            const trimmed = rawOutput.trim();
+            if (!trimmed) {
+              return '';
+            }
+            const lines = trimmed.split('\n').map((line) => line.trim()).filter(Boolean);
+            if (lines.length === 0) {
+              return '';
+            }
+            if (lines.length >= 2 && lines[0].endsWith(':')) {
+              return `${lines[0]} ${lines[1]}`;
+            }
+            return lines[0];
           })()
         : '';
 
       if (completed) {
-        setStatus(`Plot completed immediately for ${selectedFile}${outputSummary}`, 'success');
+        const summary = outputSnippet ? ` (${outputSnippet})` : '';
+        setStatus(`Plot completed immediately for ${selectedFile}${summary}`, 'success');
         plotRunning = false;
         plotProgress = 100;
         plotElapsedSeconds = 0;
