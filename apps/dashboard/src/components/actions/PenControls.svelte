@@ -2,6 +2,16 @@
   import Button from '../Button/Button.svelte';
   import { API_BASE_URL } from '../../lib/rpiApi';
 
+  type CommandPayload = {
+    ok?: boolean;
+    command?: string;
+    stdout?: string;
+    stderr?: string;
+    detail?: unknown;
+    state?: string;
+    segments?: CommandPayload[];
+  };
+
   let xInput: string | number | null = '';
   let yInput: string | number | null = '';
   let isMoving = false;
@@ -26,26 +36,33 @@
       penBusy = true;
       const response = await fetch(`${API_BASE_URL}/pen/toggle`, { method: 'POST' });
       const text = await response.text();
+      let payload: CommandPayload | null = null;
+      try {
+        payload = text ? JSON.parse(text) : null;
+      } catch (parseError) {
+        payload = null;
+      }
+      console.log('pen/toggle response', payload);
+      const command = payload && typeof payload.command === 'string' ? payload.command : null;
+      if (command) {
+        console.log('nextdraw command', command);
+      }
       if (!response.ok) {
         console.error('API error:', response.statusText);
         let message = text || 'Failed to toggle pen';
-        try {
-          const payload = JSON.parse(text);
-          if (payload?.detail) {
-            message = typeof payload.detail === 'string' ? payload.detail : JSON.stringify(payload.detail);
-          }
-        } catch (parseError) {
-          // ignore parse error, fall back to text
+        if (payload?.detail) {
+          message = typeof payload.detail === 'string' ? payload.detail : JSON.stringify(payload.detail);
         }
         setStatus(message, 'error');
         return;
       }
 
-      let payload: Record<string, unknown> | null = null;
-      try {
-        payload = text ? JSON.parse(text) : null;
-      } catch (parseError) {
-        payload = null;
+      if (payload && payload.ok === false) {
+        const stdout = typeof payload.stdout === 'string' ? payload.stdout.trim() : '';
+        const stderr = typeof payload.stderr === 'string' ? payload.stderr.trim() : '';
+        const message = stderr || stdout || 'Pen toggle failed';
+        setStatus(message, 'error');
+        return;
       }
 
       const state = payload && typeof payload.state === 'string' ? payload.state : null;
@@ -71,26 +88,33 @@
       const endpoint = enable ? 'enable_motors' : 'disable_motors';
       const response = await fetch(`${API_BASE_URL}/${endpoint}`, { method: 'POST' });
       const text = await response.text();
+      let payload: CommandPayload | null = null;
+      try {
+        payload = text ? JSON.parse(text) : null;
+      } catch (parseError) {
+        payload = null;
+      }
+      console.log(`${endpoint} response`, payload);
+      const command = payload && typeof payload.command === 'string' ? payload.command : null;
+      if (command) {
+        console.log('nextdraw command', command);
+      }
       if (!response.ok) {
         console.error('API error:', response.statusText);
         let message = text || `Failed to ${enable ? 'enable' : 'disable'} motors`;
-        try {
-          const payload = JSON.parse(text);
-          if (payload?.detail) {
-            message = typeof payload.detail === 'string' ? payload.detail : JSON.stringify(payload.detail);
-          }
-        } catch (parseError) {
-          // ignore parse errors
+        if (payload?.detail) {
+          message = typeof payload.detail === 'string' ? payload.detail : JSON.stringify(payload.detail);
         }
         setStatus(message, 'error');
         return;
       }
 
-      let payload: Record<string, unknown> | null = null;
-      try {
-        payload = text ? JSON.parse(text) : null;
-      } catch (parseError) {
-        payload = null;
+      if (payload && payload.ok === false) {
+        const stdout = typeof payload.stdout === 'string' ? payload.stdout.trim() : '';
+        const stderr = typeof payload.stderr === 'string' ? payload.stderr.trim() : '';
+        const message = stderr || stdout || `Failed to ${enable ? 'enable' : 'disable'} motors`;
+        setStatus(message, 'error');
+        return;
       }
 
       const stdout = payload && typeof payload.stdout === 'string' ? payload.stdout : null;
@@ -149,10 +173,44 @@
         },
         body: params.toString(),
       });
+      const text = await response.text();
+      let payload: CommandPayload | null = null;
+      try {
+        payload = text ? JSON.parse(text) : null;
+      } catch (parseError) {
+        payload = null;
+      }
+      console.log('walk response', payload);
+
+      const segments: CommandPayload[] = Array.isArray(payload?.segments)
+        ? payload?.segments ?? []
+        : payload
+          ? [payload]
+          : [];
+      segments.forEach((segment) => {
+        const command = segment && typeof segment.command === 'string' ? segment.command : null;
+        if (command) {
+          console.log('nextdraw command', command);
+        }
+      });
 
       if (!response.ok) {
         console.error('API error:', response.statusText);
-        setStatus('Move command failed', 'error');
+        const message = typeof payload?.stderr === 'string'
+          ? payload.stderr
+          : typeof payload?.detail === 'string'
+            ? payload.detail
+            : 'Move command failed';
+        setStatus(message, 'error');
+        return;
+      }
+
+      const failingSegment = segments.find((segment) => segment && segment.ok === false);
+      if (failingSegment) {
+        const stdout = typeof failingSegment.stdout === 'string' ? failingSegment.stdout.trim() : '';
+        const stderr = typeof failingSegment.stderr === 'string' ? failingSegment.stderr.trim() : '';
+        const message = stderr || stdout || 'Move command failed';
+        setStatus(message, 'error');
         return;
       }
 
@@ -171,26 +229,33 @@
       isMoving = true;
       const response = await fetch(`${API_BASE_URL}/walk_home`, { method: 'POST' });
       const text = await response.text();
+      let payload: CommandPayload | null = null;
+      try {
+        payload = text ? JSON.parse(text) : null;
+      } catch (parseError) {
+        payload = null;
+      }
+      console.log('walk_home response', payload);
+      const command = payload && typeof payload.command === 'string' ? payload.command : null;
+      if (command) {
+        console.log('nextdraw command', command);
+      }
       if (!response.ok) {
         console.error('API error:', response.statusText);
         let message = text || 'Walk home failed';
-        try {
-          const payload = JSON.parse(text);
-          if (payload?.detail) {
-            message = typeof payload.detail === 'string' ? payload.detail : JSON.stringify(payload.detail);
-          }
-        } catch (parseError) {
-          // ignore parse errors
+        if (payload?.detail) {
+          message = typeof payload.detail === 'string' ? payload.detail : JSON.stringify(payload.detail);
         }
         setStatus(message, 'error');
         return;
       }
 
-      let payload: Record<string, unknown> | null = null;
-      try {
-        payload = text ? JSON.parse(text) : null;
-      } catch (parseError) {
-        payload = null;
+      if (payload && payload.ok === false) {
+        const stdout = typeof payload.stdout === 'string' ? payload.stdout.trim() : '';
+        const stderr = typeof payload.stderr === 'string' ? payload.stderr.trim() : '';
+        const message = stderr || stdout || 'Walk home failed';
+        setStatus(message, 'error');
+        return;
       }
 
       const stdout = payload && typeof payload.stdout === 'string' ? payload.stdout : null;

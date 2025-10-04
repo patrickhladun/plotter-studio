@@ -27,6 +27,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from version import __version__
 
+from rotation import rotate_svg_file
+
 logger = logging.getLogger("plotterstudio.api")
 
 ET.register_namespace("", "http://www.w3.org/2000/svg")
@@ -197,11 +199,6 @@ def _svg_namespace(tag: str) -> str:
     return ""
 
 
-ROTATION_WRAPPER_ID = "plotterstudio-rotation-wrapper"
-ROTATION_ANGLE_ATTR = "data-plotterstudio-rotation"
-ROTATION_BASE_VIEWBOX_ATTR = "data-plotterstudio-base-viewbox"
-ROTATION_BASE_WIDTH_ATTR = "data-plotterstudio-base-width"
-ROTATION_BASE_HEIGHT_ATTR = "data-plotterstudio-base-height"
 PROGRESS_RE = re.compile(r"(\d+(?:\.\d+)?)%")
 TIME_RE = re.compile(r"(?:elapsed|time)[^0-9]*([0-9]+):(\d{2})(?::(\d{2}))?", re.IGNORECASE)
 DIST_RE = re.compile(r"(?:distance|travel)[^0-9]*([0-9]+(?:\.\d+)?)(\s*(?:mm|millimeters?|cm|centimeters?|m|meters?|in|inch(?:es)?))?", re.IGNORECASE)
@@ -270,136 +267,6 @@ def _watch_plot_progress(proc: subprocess.Popen[str]) -> None:
                 JOB["error"] = output_text or f"nextdraw exited with code {proc.returncode}"
 
 
-def _ensure_viewbox(root: ET.Element) -> tuple[float, float, float, float]:
-    viewbox = root.get("viewBox")
-    if viewbox:
-        parts = re.split(r"[\s,]+", viewbox.strip())
-        if len(parts) == 4:
-            try:
-                min_x, min_y, width, height = map(float, parts)
-                return min_x, min_y, width, height
-            except ValueError:
-                pass
-
-    width_px = _parse_length_to_px(root.get("width"))
-    height_px = _parse_length_to_px(root.get("height"))
-    if width_px is None or height_px is None:
-        raise HTTPException(status_code=400, detail="Unable to determine SVG dimensions for rotation")
-
-    root.set("viewBox", f"0 0 {width_px} {height_px}")
-    return 0.0, 0.0, width_px, height_px
-
-
-def _ensure_rotation_wrapper(root: ET.Element) -> ET.Element:
-    ns = _svg_namespace(root.tag)
-    wrapper: Optional[ET.Element] = None
-    for child in list(root):
-        if child.tag == f"{ns}g" and child.attrib.get("id") == ROTATION_WRAPPER_ID:
-            wrapper = child
-            break
-
-    if wrapper is not None:
-        return wrapper
-
-    wrapper = ET.Element(f"{ns}g")
-    wrapper.set("id", ROTATION_WRAPPER_ID)
-
-    for child in list(root):
-        wrapper.append(child)
-        root.remove(child)
-
-    root.append(wrapper)
-    return wrapper
-
-
-def _rotate_svg_file(path: Path, angle: int) -> None:
-    normalized = angle % 360
-    if normalized < 0:
-        normalized += 360
-    if normalized == 0:
-        return
-
-    try:
-        tree = ET.parse(path)
-    except ET.ParseError as exc:
-        raise HTTPException(status_code=400, detail="Invalid SVG content") from exc
-
-    root = tree.getroot()
-    min_x, min_y, base_width, base_height = _ensure_viewbox(root)
-    wrapper = _ensure_rotation_wrapper(root)
-
-    if ROTATION_BASE_VIEWBOX_ATTR not in wrapper.attrib:
-        wrapper.set(ROTATION_BASE_VIEWBOX_ATTR, f"{min_x} {min_y} {base_width} {base_height}")
-        if root.get("width"):
-            wrapper.set(ROTATION_BASE_WIDTH_ATTR, root.get("width") or "")
-        if root.get("height"):
-            wrapper.set(ROTATION_BASE_HEIGHT_ATTR, root.get("height") or "")
-        wrapper.set(ROTATION_ANGLE_ATTR, "0")
-
-    base_viewbox_raw = wrapper.attrib.get(ROTATION_BASE_VIEWBOX_ATTR)
-    if not base_viewbox_raw:
-        base_viewbox_raw = f"{min_x} {min_y} {base_width} {base_height}"
-        wrapper.set(ROTATION_BASE_VIEWBOX_ATTR, base_viewbox_raw)
-
-    try:
-        base_min_x, base_min_y, base_w, base_h = map(float, re.split(r"[\s,]+", base_viewbox_raw.strip()))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Stored SVG metadata is invalid") from exc
-
-    base_cx = base_min_x + base_w / 2.0
-    base_cy = base_min_y + base_h / 2.0
-
-    current_angle = int(wrapper.attrib.get(ROTATION_ANGLE_ATTR, "0")) % 360
-    total_angle = (current_angle + normalized) % 360
-
-    angle_rad = math.radians(total_angle)
-    cos_a = math.cos(angle_rad)
-    sin_a = math.sin(angle_rad)
-
-    corners = [
-        (base_min_x, base_min_y),
-        (base_min_x + base_w, base_min_y),
-        (base_min_x, base_min_y + base_h),
-        (base_min_x + base_w, base_min_y + base_h),
-    ]
-
-    rotated_points = []
-    for x, y in corners:
-        dx = x - base_cx
-        dy = y - base_cy
-        rx = cos_a * dx - sin_a * dy + base_cx
-        ry = sin_a * dx + cos_a * dy + base_cy
-        rotated_points.append((rx, ry))
-
-    new_min_x = min(p[0] for p in rotated_points)
-    new_max_x = max(p[0] for p in rotated_points)
-    new_min_y = min(p[1] for p in rotated_points)
-    new_max_y = max(p[1] for p in rotated_points)
-    new_width = new_max_x - new_min_x
-    new_height = new_max_y - new_min_y
-
-    root.set("viewBox", f"{new_min_x:.6f} {new_min_y:.6f} {new_width:.6f} {new_height:.6f}")
-
-    base_width_attr = wrapper.attrib.get(ROTATION_BASE_WIDTH_ATTR)
-    base_height_attr = wrapper.attrib.get(ROTATION_BASE_HEIGHT_ATTR)
-    if base_width_attr is not None and base_height_attr is not None:
-        if total_angle % 180 in {90, 270}:
-            root.set("width", base_height_attr)
-            root.set("height", base_width_attr)
-        else:
-            root.set("width", base_width_attr)
-            root.set("height", base_height_attr)
-
-    if total_angle == 0:
-        wrapper.attrib.pop("transform", None)
-    else:
-        wrapper.set("transform", f"rotate({total_angle},{base_cx},{base_cy})")
-
-    wrapper.set(ROTATION_ANGLE_ATTR, str(total_angle))
-
-    tree.write(path, encoding="utf-8", xml_declaration=True)
-
-
 def _estimate_distance_mm(path: Path) -> float | None:
     if svg2paths2 is None:
         return None
@@ -449,7 +316,6 @@ def _estimate_distance_mm(path: Path) -> float | None:
 
 def _preview_via_nextdraw(
     svg_path: Path,
-    page: str,
     handling: int,
     speed: int,
     brushless: bool,
@@ -629,7 +495,6 @@ def _configure_frontend(app: FastAPI) -> None:
         return FileResponse(index_file)
 
 
-# Enable CORS so your Next.js frontend can talk to it
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -716,23 +581,32 @@ def _run_utility(command: str, extra_args: Optional[Sequence[str]] = None) -> su
     except FileNotFoundError as exc:
         raise HTTPException(
             status_code=500,
-            detail="nextdraw binary not found; set PLOTTERSTUDIO_NEXTDRAW (or legacy SYNTHDRAW_AXICLI) to the full path",
+            detail="nextdraw binary not found; set PLOTTERSTUDIO_NEXTDRAW to the full path",
         ) from exc
 
 
-def _manual_response(action: str, result: subprocess.CompletedProcess[str], extra: dict[str, Any] | None = None):
+def _manual_response(
+    action: str,
+    result: subprocess.CompletedProcess[str],
+    extra: dict[str, Any] | None = None,
+    *,
+    error_on_failure: bool = True,
+):
     payload: dict[str, Any] = {
         "ok": result.returncode == 0,
         "action": action,
         "returncode": result.returncode,
     }
+    command_args = getattr(result, "args", None)
+    if command_args:
+        payload["command"] = _format_command(command_args)
     if extra:
         payload.update(extra)
     if result.stdout:
         payload["stdout"] = result.stdout.strip()
     if result.stderr:
         payload["stderr"] = result.stderr.strip()
-    if not payload["ok"]:
+    if not payload["ok"] and error_on_failure:
         raise HTTPException(status_code=500, detail=payload)
     return payload
 
@@ -946,7 +820,7 @@ def rotate_file(filename: str, request: RotateRequest):
     if normalized == 0:
         return {"rotated": False, "angle": 0}
 
-    _rotate_svg_file(target, normalized)
+    rotate_svg_file(target, normalized)
     return {"rotated": True, "angle": normalized}
 
 
@@ -1065,7 +939,7 @@ def version():
 @app.post("/disable_motors")
 def disable_motors():
     result = _run_utility("disable_xy")
-    return _manual_response("motors disabled", result)
+    return _manual_response("motors disabled", result, error_on_failure=False)
 
 
 @app.post("/pen/toggle")
@@ -1073,33 +947,23 @@ def pen_toggle():
     result = _run_utility("toggle")
     state = _infer_pen_state(result.stdout) or _infer_pen_state(result.stderr)
     extra = {"state": state} if state else None
-    return _manual_response("pen toggled", result, extra)
-
-
-@app.post("/pen/up")
-def pen_up():
-    result = _run_utility("raise_pen")
-    return _manual_response("pen raised", result)
-
-
-@app.post("/pen/down")
-def pen_down():
-    result = _run_utility("lower_pen")
-    return _manual_response("pen lowered", result)
+    return _manual_response("pen toggled", result, extra, error_on_failure=False)
 
 
 @app.post("/enable_motors")
 def enable_motors():
     result = _run_utility("enable_xy")
-    return _manual_response("motors enabled", result)
+    return _manual_response("motors enabled", result, error_on_failure=False)
 
 
 @app.post("/walk_home")
 def walk_home():
     result = _run_utility("walk_home")
-    return _manual_response("walk home", result)
+    return _manual_response("walk home", result, error_on_failure=False)
 
 
+# Start walking only after ensuring motors are enabled
+# Get location and calculate max walk distance, if larger is set cancel 
 @app.post("/walk")
 def walk(x_mm: float = Form(0.0), y_mm: float = Form(0.0)):
     if x_mm == 0 and y_mm == 0:
@@ -1108,10 +972,24 @@ def walk(x_mm: float = Form(0.0), y_mm: float = Form(0.0)):
     responses: list[dict[str, Any]] = []
     if x_mm != 0:
         res_x = _run_utility("walk_mmx", ["--dist", x_mm])
-        responses.append(_manual_response("walk x", res_x, {"distance_mm": x_mm}))
+        responses.append(
+            _manual_response(
+                "walk x",
+                res_x,
+                {"distance_mm": x_mm},
+                error_on_failure=False,
+            )
+        )
     if y_mm != 0:
         res_y = _run_utility("walk_mmy", ["--dist", y_mm])
-        responses.append(_manual_response("walk y", res_y, {"distance_mm": y_mm}))
+        responses.append(
+            _manual_response(
+                "walk y",
+                res_y,
+                {"distance_mm": y_mm},
+                error_on_failure=False,
+            )
+        )
 
     if len(responses) == 1:
         return responses[0]
@@ -1122,8 +1000,6 @@ def walk(x_mm: float = Form(0.0), y_mm: float = Form(0.0)):
         "distance_mm": {"x": x_mm, "y": y_mm},
         "segments": responses,
     }
-    if not combined["ok"]:
-        raise HTTPException(status_code=500, detail=combined)
     return combined
 
 
@@ -1132,13 +1008,6 @@ def move_to(x_mm: float = Form(...), y_mm: float = Form(...)):
     _ensure_motors_enabled()
     result = _run_manual(f"move_to {x_mm:.2f} {y_mm:.2f}")
     return _manual_response("move", result, {"x": x_mm, "y": y_mm})
-
-
-@app.post("/home")
-def move_home():
-    _ensure_motors_enabled()
-    result = _run_manual("move_to 0.00 0.00")
-    return _manual_response("home", result, {"x": 0.0, "y": 0.0})
 
 
 @app.post("/cancel")
