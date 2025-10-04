@@ -667,9 +667,11 @@ def _nextdraw_base() -> list[str]:
 
 
 def _run_manual(command: str) -> subprocess.CompletedProcess[str]:
+    args = [*_nextdraw_base(), "--mode", "manual", "--manual_cmd", command]
+    logger.info("Running nextdraw manual command: %s", _format_command(args))
     try:
         return subprocess.run(
-            [*_nextdraw_base(), "--mode", "manual", "--manual_cmd", command],
+            args,
             check=False,
             capture_output=True,
             text=True,
@@ -683,7 +685,39 @@ def _run_manual(command: str) -> subprocess.CompletedProcess[str]:
 
 def _ensure_motors_enabled() -> None:
     """Enable XY motors before attempting movement commands."""
-    _manual_response("motors enabled", _run_manual("enable_xy"))
+    _manual_response("motors enabled", _run_utility("enable_xy"))
+
+
+def _infer_pen_state(text: Optional[str]) -> Optional[str]:
+    if not text:
+        return None
+    lowered = text.lower()
+    if "pen" not in lowered:
+        return None
+    if "down" in lowered and "up" not in lowered:
+        return "down"
+    if "up" in lowered and "down" not in lowered:
+        return "up"
+    return None
+
+
+def _run_utility(command: str, extra_args: Optional[Sequence[str]] = None) -> subprocess.CompletedProcess[str]:
+    args = [*_nextdraw_base(), "-m", "utility", "-M", command]
+    if extra_args:
+        args.extend(str(item) for item in extra_args)
+    logger.info("Running nextdraw utility command: %s", _format_command(args))
+    try:
+        return subprocess.run(
+            args,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="nextdraw binary not found; set PLOTTERSTUDIO_NEXTDRAW (or legacy SYNTHDRAW_AXICLI) to the full path",
+        ) from exc
 
 
 def _manual_response(action: str, result: subprocess.CompletedProcess[str], extra: dict[str, Any] | None = None):
@@ -1030,20 +1064,67 @@ def version():
 
 @app.post("/disable_motors")
 def disable_motors():
-    result = _run_manual("disable_xy")
+    result = _run_utility("disable_xy")
     return _manual_response("motors disabled", result)
+
+
+@app.post("/pen/toggle")
+def pen_toggle():
+    result = _run_utility("toggle")
+    state = _infer_pen_state(result.stdout) or _infer_pen_state(result.stderr)
+    extra = {"state": state} if state else None
+    return _manual_response("pen toggled", result, extra)
 
 
 @app.post("/pen/up")
 def pen_up():
-    result = _run_manual("raise_pen")
+    result = _run_utility("raise_pen")
     return _manual_response("pen raised", result)
 
 
 @app.post("/pen/down")
 def pen_down():
-    result = _run_manual("lower_pen")
+    result = _run_utility("lower_pen")
     return _manual_response("pen lowered", result)
+
+
+@app.post("/enable_motors")
+def enable_motors():
+    result = _run_utility("enable_xy")
+    return _manual_response("motors enabled", result)
+
+
+@app.post("/walk_home")
+def walk_home():
+    result = _run_utility("walk_home")
+    return _manual_response("walk home", result)
+
+
+@app.post("/walk")
+def walk(x_mm: float = Form(0.0), y_mm: float = Form(0.0)):
+    if x_mm == 0 and y_mm == 0:
+        raise HTTPException(status_code=400, detail="Specify a non-zero distance for X and/or Y")
+
+    responses: list[dict[str, Any]] = []
+    if x_mm != 0:
+        res_x = _run_utility("walk_mmx", ["--dist", x_mm])
+        responses.append(_manual_response("walk x", res_x, {"distance_mm": x_mm}))
+    if y_mm != 0:
+        res_y = _run_utility("walk_mmy", ["--dist", y_mm])
+        responses.append(_manual_response("walk y", res_y, {"distance_mm": y_mm}))
+
+    if len(responses) == 1:
+        return responses[0]
+
+    combined = {
+        "ok": all(item.get("ok", False) for item in responses),
+        "action": "walk",
+        "distance_mm": {"x": x_mm, "y": y_mm},
+        "segments": responses,
+    }
+    if not combined["ok"]:
+        raise HTTPException(status_code=500, detail=combined)
+    return combined
 
 
 @app.post("/move")

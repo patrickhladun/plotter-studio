@@ -5,8 +5,10 @@
   let xInput: string | number | null = '';
   let yInput: string | number | null = '';
   let isMoving = false;
+  let penBusy = false;
   let statusMessage: string | null = null;
   let statusTone: 'success' | 'error' | null = null;
+  let motorsBusy = false;
 
   const setStatus = (message: string, tone: 'success' | 'error') => {
     statusMessage = message;
@@ -18,35 +20,91 @@
     statusTone = null;
   };
 
-  const handlePenUp = async () => {
+  const handlePenToggle = async () => {
     clearStatus();
     try {
-      const response = await fetch(`${API_BASE_URL}/pen/up`, { method: 'POST' });
+      penBusy = true;
+      const response = await fetch(`${API_BASE_URL}/pen/toggle`, { method: 'POST' });
+      const text = await response.text();
       if (!response.ok) {
         console.error('API error:', response.statusText);
-        setStatus('Failed to raise pen', 'error');
+        let message = text || 'Failed to toggle pen';
+        try {
+          const payload = JSON.parse(text);
+          if (payload?.detail) {
+            message = typeof payload.detail === 'string' ? payload.detail : JSON.stringify(payload.detail);
+          }
+        } catch (parseError) {
+          // ignore parse error, fall back to text
+        }
+        setStatus(message, 'error');
         return;
       }
-      setStatus('Pen raised', 'success');
+
+      let payload: Record<string, unknown> | null = null;
+      try {
+        payload = text ? JSON.parse(text) : null;
+      } catch (parseError) {
+        payload = null;
+      }
+
+      const state = payload && typeof payload.state === 'string' ? payload.state : null;
+      const stdout = payload && typeof payload.stdout === 'string' ? payload.stdout : null;
+      const inferredMessage = state
+        ? `Pen ${state}`
+        : stdout && stdout.trim().length > 0
+          ? stdout.trim().split('\n')[0]
+          : 'Pen toggled';
+      setStatus(inferredMessage, 'success');
     } catch (error) {
       console.error('API error:', error);
-      setStatus('Pen up request failed', 'error');
+      setStatus('Pen toggle failed', 'error');
+    } finally {
+      penBusy = false;
     }
   };
 
-  const handlePenDown = async () => {
+  const handleMotors = async (enable: boolean) => {
     clearStatus();
     try {
-      const response = await fetch(`${API_BASE_URL}/pen/down`, { method: 'POST' });
+      motorsBusy = true;
+      const endpoint = enable ? 'enable_motors' : 'disable_motors';
+      const response = await fetch(`${API_BASE_URL}/${endpoint}`, { method: 'POST' });
+      const text = await response.text();
       if (!response.ok) {
         console.error('API error:', response.statusText);
-        setStatus('Failed to lower pen', 'error');
+        let message = text || `Failed to ${enable ? 'enable' : 'disable'} motors`;
+        try {
+          const payload = JSON.parse(text);
+          if (payload?.detail) {
+            message = typeof payload.detail === 'string' ? payload.detail : JSON.stringify(payload.detail);
+          }
+        } catch (parseError) {
+          // ignore parse errors
+        }
+        setStatus(message, 'error');
         return;
       }
-      setStatus('Pen lowered', 'success');
+
+      let payload: Record<string, unknown> | null = null;
+      try {
+        payload = text ? JSON.parse(text) : null;
+      } catch (parseError) {
+        payload = null;
+      }
+
+      const stdout = payload && typeof payload.stdout === 'string' ? payload.stdout : null;
+      const inferred = stdout && stdout.trim().length > 0
+        ? stdout.trim().split('\n')[0]
+        : enable
+          ? 'Motors enabled'
+          : 'Motors disabled';
+      setStatus(inferred, 'success');
     } catch (error) {
       console.error('API error:', error);
-      setStatus('Pen down request failed', 'error');
+      setStatus(`Motor ${enable ? 'enable' : 'disable'} failed`, 'error');
+    } finally {
+      motorsBusy = false;
     }
   };
 
@@ -84,7 +142,7 @@
 
     try {
       isMoving = true;
-      const response = await fetch(`${API_BASE_URL}/move`, {
+      const response = await fetch(`${API_BASE_URL}/walk`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -98,7 +156,7 @@
         return;
       }
 
-      setStatus(`Move command sent (x=${xValue}, y=${yValue})`, 'success');
+      setStatus(`Walking to offset (Δx=${xValue}, Δy=${yValue})`, 'success');
     } catch (error) {
       console.error('API error:', error);
       setStatus('Move request failed', 'error');
@@ -107,22 +165,44 @@
     }
   };
 
-  const handleHome = async () => {
+  const handleWalkHome = async () => {
     clearStatus();
     try {
       isMoving = true;
-      const response = await fetch(`${API_BASE_URL}/home`, { method: 'POST' });
+      const response = await fetch(`${API_BASE_URL}/walk_home`, { method: 'POST' });
+      const text = await response.text();
       if (!response.ok) {
         console.error('API error:', response.statusText);
-        setStatus('Home command failed', 'error');
+        let message = text || 'Walk home failed';
+        try {
+          const payload = JSON.parse(text);
+          if (payload?.detail) {
+            message = typeof payload.detail === 'string' ? payload.detail : JSON.stringify(payload.detail);
+          }
+        } catch (parseError) {
+          // ignore parse errors
+        }
+        setStatus(message, 'error');
         return;
       }
+
+      let payload: Record<string, unknown> | null = null;
+      try {
+        payload = text ? JSON.parse(text) : null;
+      } catch (parseError) {
+        payload = null;
+      }
+
+      const stdout = payload && typeof payload.stdout === 'string' ? payload.stdout : null;
+      const inferred = stdout && stdout.trim().length > 0
+        ? stdout.trim().split('\n')[0]
+        : 'Walking home';
       xInput = '0';
       yInput = '0';
-      setStatus('Returning to origin (0, 0)', 'success');
+      setStatus(inferred, 'success');
     } catch (error) {
       console.error('API error:', error);
-      setStatus('Home request failed', 'error');
+      setStatus('Walk home request failed', 'error');
     } finally {
       isMoving = false;
     }
@@ -132,9 +212,16 @@
 <div class="py-4 border-b border-neutral-600 text-xs text-neutral-200">
   <h2 class="font-semibold mb-2 text-sm text-white">Manual Controls</h2>
   <div class="flex gap-2 mb-3">
-    <Button on:click={handlePenUp}>Pen Up</Button>
-    <Button on:click={handlePenDown}>Pen Down</Button>
-    <Button on:click={handleHome} disabled={isMoving}>Home</Button>
+    <Button on:click={handlePenToggle} disabled={penBusy}>
+      {#if penBusy}
+        Toggling...
+      {:else}
+        Toggle Pen
+      {/if}
+    </Button>
+    <Button on:click={() => handleMotors(true)} disabled={motorsBusy}>Enable Motors</Button>
+    <Button on:click={() => handleMotors(false)} disabled={motorsBusy}>Disable Motors</Button>
+    <Button on:click={handleWalkHome} disabled={isMoving}>Walk Home</Button>
   </div>
   <div class="grid grid-cols-3 gap-2">
     <label class="flex flex-col">
