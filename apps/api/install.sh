@@ -227,6 +227,20 @@ if [ -z "$IP_ADDRESS" ]; then
   IP_ADDRESS="$(hostname)"
 fi
 
+# --- Fix entrypoint for Raspberry Pi environment ---
+LAUNCHER="$BIN_DIR/plotterstudio"
+if [ -f "$LAUNCHER" ]; then
+  echo "[patch] Updating plotterstudio launcher to use apps.api.main"
+  sed -i 's/from main import cli/from apps.api.main import cli/' "$LAUNCHER" || true
+fi
+
+# Also fix the copy in the virtualenv, if exists
+VENV_LAUNCHER="$APP_DIR/venv/bin/plotterstudio"
+if [ -f "$VENV_LAUNCHER" ]; then
+  echo "[patch] Updating venv launcher to use apps.api.main"
+  sed -i 's/from main import cli/from apps.api.main import cli/' "$VENV_LAUNCHER" || true
+fi
+
 echo "[done] Installation complete."
 echo "Start the combined API + dashboard with:"
 echo "  plotterstudio run"
