@@ -198,6 +198,14 @@ fi
 
 deactivate
 
+# --- Patch CLI launcher to import from apps.api.main ---
+for CLI_FILE in "$BIN_DIR/plotterstudio" "$APP_DIR/venv/bin/plotterstudio"; do
+  if [ -f "$CLI_FILE" ]; then
+    echo "[patch] Updating CLI launcher at $CLI_FILE"
+    sed -i.bak 's|from main import cli|from apps.api.main import cli|' "$CLI_FILE" && rm -f "$CLI_FILE.bak"
+  fi
+done
+
 mkdir -p "$BIN_DIR"
 ln -sf "$APP_DIR/venv/bin/plotterstudio" "$BIN_DIR/plotterstudio"
 ln -sf "$APP_DIR/venv/bin/plotterstudio" "$BIN_DIR/sdraw" || true
