@@ -52,11 +52,14 @@ source venv/bin/activate
 pip install --upgrade pip wheel
 pip install ./apps/api
 
-# -------- Axidraw API --------
-echo "[setup] Installing AxiDraw CLI"
-if ! pip install --upgrade https://cdn.evilmadscientist.com/dl/ad/public/AxiDraw_API.zip; then
-  echo "[warn] Could not install AxiDraw API from zip, skipping"
+# -------- NextDraw API --------
+echo "[setup] Installing NextDraw CLI"
+NEXTDRAW_URL="https://software-download.bantamtools.com/nd/api/nextdraw_api.zip"
+if ! pip install --upgrade "$NEXTDRAW_URL"; then
+  echo "[error] Failed to install NextDraw CLI from $NEXTDRAW_URL" >&2
+  exit 1
 fi
+echo "[setup] NextDraw API installed successfully."
 
 # -------- Frontend build --------
 pnpm install --filter dashboard --prod=false
