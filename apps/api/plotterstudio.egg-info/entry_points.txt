@@ -1,0 +1,2 @@
+[console_scripts]
+plotterstudio = main:cli
