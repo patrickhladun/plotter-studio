@@ -11,7 +11,7 @@ def cli():
 
 @cli.command()
 @click.option("--host", default=lambda: os.getenv("PLOTTERSTUDIO_HOST", "0.0.0.0"), help="Host to bind to")
-@click.option("--port", type=int, default=lambda: int(os.getenv("PLOTTERSTUDIO_PORT", "7171")), help="Port to listen on")
+@click.option("--port", type=int, default=lambda: int(os.getenv("PLOTTERSTUDIO_PORT", "2222")), help="Port to listen on")
 @click.option("--reload", is_flag=True, default=False, help="Enable uvicorn reload")
 def run(host: str, port: int, reload: bool):
     """Start the Plotter Studio API using uvicorn."""

@@ -62,7 +62,7 @@ cp -R apps/dashboard/dist/. "$FRONTEND_TARGET/"
 touch "$ENV_FILE"
 echo "PLOTTERSTUDIO_HOME=$APP_DIR" > "$ENV_FILE"
 echo "PLOTTERSTUDIO_HOST=0.0.0.0" >> "$ENV_FILE"
-echo "PLOTTERSTUDIO_PORT=7171" >> "$ENV_FILE"
+echo "PLOTTERSTUDIO_PORT=2222" >> "$ENV_FILE"
 echo "PLOTTERSTUDIO_FRONTEND_DIST=$FRONTEND_TARGET" >> "$ENV_FILE"
 
 # --- Patch CLI launcher ---
@@ -85,4 +85,4 @@ deactivate
 IP_ADDRESS=$(hostname -I 2>/dev/null | awk '{print $1}' || hostname)
 echo "[done] Installation complete."
 echo "Run: plotterstudio run"
-echo "Open: http://${IP_ADDRESS}:7171"
+echo "Open: http://${IP_ADDRESS}:2222"
