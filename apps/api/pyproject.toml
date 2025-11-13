@@ -24,4 +24,9 @@ Homepage = "https://github.com/patrickhladun/plotter-studio"
 plotterstudio = "apps.api.cli:cli"
 
 [tool.setuptools]
-py-modules = ["main", "version"]
+# Install the full apps package structure
+packages = ["apps", "apps.api", "apps.api.core", "apps.api.routes"]
+package-dir = {"" = "../.."}
+
+# Also install version.py as a top-level module for backward compatibility
+py-modules = ["version"]
