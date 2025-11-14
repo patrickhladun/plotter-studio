@@ -18,11 +18,6 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/patrickhladun/plotter-studio"
 
-[project.scripts]
-# Use the explicit CLI module so the generated console script resolves
-# to the click-based entrypoint we added in `apps/api/cli.py`.
-plotterstudio = "apps.api.cli:cli"
-
 [tool.setuptools]
 # Install the full apps package structure
 packages = ["apps", "apps.api", "apps.api.core", "apps.api.routes"]

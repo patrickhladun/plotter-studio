@@ -20,8 +20,6 @@ for path in [CURRENT_DIR, PARENT_DIR]:
 # ============================================================
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 
 from version import __version__
 from apps.api.core.state import DATA_DIR
@@ -51,13 +49,6 @@ app = FastAPI(title="Plotter Studio", version=__version__)
 
 # ============================================================
 
-
-FRONTEND_DIST = Path(
-    os.getenv("PLOTTERSTUDIO_FRONTEND_DIST")
-    or os.getenv("SYNTHDRAW_FRONTEND_DIST")
-    or Path(__file__).resolve().parent / "frontend"
-)
-
 DEFAULT_HOME = Path(
     os.getenv("PLOTTERSTUDIO_HOME")
     or os.getenv("SYNTHDRAW_HOME")
@@ -72,39 +63,17 @@ DATA_DIR = Path(
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def _configure_frontend(app: FastAPI) -> None:
-    """Serve built dashboard files if present."""
-    if not FRONTEND_DIST.exists():
-        logger.warning("Frontend bundle directory not found at %s", FRONTEND_DIST)
-        return
-
-    assets_dir = FRONTEND_DIST / "assets"
-    if assets_dir.exists():
-        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
-
-    index_file = FRONTEND_DIST / "index.html"
-    if not index_file.exists():
-        logger.warning("Frontend bundle missing index.html at %s", index_file)
-        return
-
-    @app.get("/", include_in_schema=False)
-    async def serve_index() -> FileResponse:
-        return FileResponse(index_file)
-
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_spa(full_path: str) -> FileResponse:
-        candidate = FRONTEND_DIST / full_path
-        if candidate.exists() and candidate.is_file():
-            return FileResponse(candidate)
-        return FileResponse(index_file)
-
-
 # ============================================================
 # CORS + Routes
 # ============================================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:2121"],
+    allow_origins=[
+        "http://localhost:2121",  # Vite dev server
+        "http://localhost:5173",  # Alternative Vite port
+        "http://127.0.0.1:2121",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -129,10 +98,7 @@ def version():
 
 
 # ============================================================
-# Frontend & Init Logging
+# Init Logging
 # ============================================================
-_configure_frontend(app)
-
 logger.info("Plotter Studio API initialized.")
-logger.info(f"Frontend path: {FRONTEND_DIST}")
 logger.info(f"Data directory: {DATA_DIR}")
