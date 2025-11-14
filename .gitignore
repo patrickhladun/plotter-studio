@@ -7,4 +7,6 @@ build
 
 # Generated frontend bundle
 apps/api/frontend
-temp/
+temp/.env
+.env
+/.env

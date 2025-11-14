@@ -1,7 +1,6 @@
 README.md
 pyproject.toml
 ../../apps/api/__init__.py
-../../apps/api/cli.py
 ../../apps/api/main.py
 ../../apps/api/rotation.py
 ../../apps/api/version.py
@@ -17,6 +16,5 @@ pyproject.toml
 ../../plotterstudio.egg-info/PKG-INFO
 ../../plotterstudio.egg-info/SOURCES.txt
 ../../plotterstudio.egg-info/dependency_links.txt
-../../plotterstudio.egg-info/entry_points.txt
 ../../plotterstudio.egg-info/requires.txt
 ../../plotterstudio.egg-info/top_level.txt
