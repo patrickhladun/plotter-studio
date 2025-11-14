@@ -126,12 +126,12 @@ add_env_line "PLOTTERSTUDIO_AXICLI" "$AXICLI_PATH"
 add_env_line "PLOTTERSTUDIO_HOME" "$APP_DIR"
 add_env_line "PLOTTERSTUDIO_ENV_FILE" "$ENV_FILE"
 add_env_line "PLOTTERSTUDIO_HOST" "0.0.0.0"
-add_env_line "PLOTTERSTUDIO_PORT" "7171"
+add_env_line "PLOTTERSTUDIO_PORT" "2222"
 add_env_line "SYNTHDRAW_AXICLI" "$AXICLI_PATH"
 add_env_line "SYNTHDRAW_HOME" "$APP_DIR"
 add_env_line "SYNTHDRAW_ENV_FILE" "$ENV_FILE"
 add_env_line "SYNTHDRAW_HOST" "0.0.0.0"
-add_env_line "SYNTHDRAW_PORT" "7171"
+add_env_line "SYNTHDRAW_PORT" "2222"
 
 pnpm install --filter dashboard --prod=false
 pnpm --filter dashboard build
@@ -241,8 +241,24 @@ if [ -f "$VENV_LAUNCHER" ]; then
   sed -i 's/from main import cli/from apps.api.main import cli/' "$VENV_LAUNCHER" || true
 fi
 
+# --- Add to shell profile ---
+SHELL_RC="$HOME/.bashrc"
+if [ -f "$SHELL_RC" ]; then
+  if ! grep -q "PLOTTERSTUDIO_HOME" "$SHELL_RC"; then
+    echo "" >> "$SHELL_RC"
+    echo "# Plotter Studio environment" >> "$SHELL_RC"
+    echo "export PLOTTERSTUDIO_HOME=$APP_DIR" >> "$SHELL_RC"
+    echo "[setup] Added PLOTTERSTUDIO_HOME to $SHELL_RC"
+  else
+    echo "[setup] PLOTTERSTUDIO_HOME already in $SHELL_RC"
+  fi
+fi
+
 echo "[done] Installation complete."
 echo "Start the combined API + dashboard with:"
 echo "  plotterstudio run"
 echo "  (legacy) sdraw run"
-echo "Then open: http://${IP_ADDRESS}:7171"
+echo "Then open: http://${IP_ADDRESS}:2222"
+echo ""
+echo "NOTE: To use PLOTTERSTUDIO_HOME in current shell, run:"
+echo "  source ~/.bashrc"

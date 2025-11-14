@@ -4,7 +4,7 @@
 
   const disableMotors = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/disable_motors`, {
+      const response = await fetch(`${API_BASE_URL}/plot/disable_motors`, {
         method: 'POST',
       });
 

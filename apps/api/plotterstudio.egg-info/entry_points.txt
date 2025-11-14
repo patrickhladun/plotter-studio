@@ -1,2 +1,2 @@
 [console_scripts]
-plotterstudio = main:cli
+plotterstudio = cli:cli

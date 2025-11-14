@@ -62,7 +62,7 @@ cp -R apps/dashboard/dist/. "$FRONTEND_TARGET/"
 touch "$ENV_FILE"
 echo "PLOTTERSTUDIO_HOME=$APP_DIR" > "$ENV_FILE"
 echo "PLOTTERSTUDIO_HOST=0.0.0.0" >> "$ENV_FILE"
-echo "PLOTTERSTUDIO_PORT=7171" >> "$ENV_FILE"
+echo "PLOTTERSTUDIO_PORT=2222" >> "$ENV_FILE"
 echo "PLOTTERSTUDIO_FRONTEND_DIST=$FRONTEND_TARGET" >> "$ENV_FILE"
 
 # --- Patch CLI launcher ---
@@ -82,7 +82,23 @@ fi
 
 deactivate
 
+# --- Add to shell profile ---
+SHELL_RC="$HOME/.bashrc"
+if [ -f "$SHELL_RC" ]; then
+  if ! grep -q "PLOTTERSTUDIO_HOME" "$SHELL_RC"; then
+    echo "" >> "$SHELL_RC"
+    echo "# Plotter Studio environment" >> "$SHELL_RC"
+    echo "export PLOTTERSTUDIO_HOME=$APP_DIR" >> "$SHELL_RC"
+    echo "[setup] Added PLOTTERSTUDIO_HOME to $SHELL_RC"
+  else
+    echo "[setup] PLOTTERSTUDIO_HOME already in $SHELL_RC"
+  fi
+fi
+
 IP_ADDRESS=$(hostname -I 2>/dev/null | awk '{print $1}' || hostname)
 echo "[done] Installation complete."
 echo "Run: plotterstudio run"
-echo "Open: http://${IP_ADDRESS}:7171"
+echo "Open: http://${IP_ADDRESS}:2222"
+echo ""
+echo "NOTE: To use PLOTTERSTUDIO_HOME in current shell, run:"
+echo "  source ~/.bashrc"

@@ -51,7 +51,6 @@
 
   const sections: { key: SectionKey; icon: string; label: string }[] = [
     { key: 'manage', icon: '📁', label: 'Manage Files' },
-    { key: 'edit', icon: '✏️', label: 'Edit File' },
     { key: 'settings', icon: '⚙️', label: 'Print Settings' },
     { key: 'plot', icon: '🖊️', label: 'Plot Controls' },
     { key: 'manual', icon: '🤖', label: 'Manual Commands' },
@@ -422,7 +421,7 @@
     clearStatus();
     try {
       stopping = true;
-      const response = await fetch(`${API_BASE_URL}/cancel`, {
+      const response = await fetch(`${API_BASE_URL}/plot/cancel`, {
         method: 'POST',
       });
       if (!response.ok) {
@@ -444,7 +443,7 @@
 
   const pollStatus = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/status`);
+      const response = await fetch(`${API_BASE_URL}/plot/status`);
       if (!response.ok) {
         throw new Error(await response.text());
       }
@@ -777,7 +776,7 @@
             {/if}
           </div>
         </div>
-      {:else if openSection === 'edit'}
+
         {#if selectedFile}
           <div class="space-y-3">
             {#if selectedDimensions}
@@ -824,6 +823,8 @@
         {:else}
           <p class="text-neutral-400 text-xs">Select a file to edit its details.</p>
         {/if}
+
+        
       {:else if openSection === 'settings'}
         {#if selectedFile}
           <div class="space-y-3">

@@ -1,4 +1,5 @@
 README.md
+cli.py
 main.py
 pyproject.toml
 version.py

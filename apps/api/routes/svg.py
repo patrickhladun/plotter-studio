@@ -6,8 +6,8 @@ from fastapi.responses import FileResponse
 
 from core.utils import _sanitize_filename
 from core.files import _file_metadata, _unique_filename, DATA_DIR
-from core.schemas import RotateRequest, RenameRequest
-from core.nextdraw import _run_manual, _run_utility
+from core.schemas import RotateRequest, RenameRequest, PlotRequest
+from core.nextdraw import _run_manual, _run_utility, _start_plot_from_path
 from core.state import DATA_DIR
 from rotation import rotate_svg_file
 
@@ -116,3 +116,24 @@ def raw_file(filename: str):
     if not target.exists():
         raise HTTPException(status_code=404, detail="File not found")
     return Response(target.read_text(), media_type="image/svg+xml")
+
+@router.post("/{filename}/plot")
+def plot_file(filename: str, request: PlotRequest):
+    """Start plotting an uploaded SVG file."""
+    safe_name = _sanitize_filename(filename)
+    target = DATA_DIR / safe_name
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return _start_plot_from_path(
+        svg_source=target,
+        page=request.page,
+        s_down=request.s_down,
+        s_up=request.s_up,
+        p_down=request.p_down,
+        p_up=request.p_up,
+        handling=request.handling,
+        speed=request.speed,
+        brushless=request.brushless,
+        original_name=safe_name,
+    )

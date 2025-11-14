@@ -24,3 +24,14 @@ class RenameRequest(BaseModel):
         if not candidate.lower().endswith(".svg"):
             candidate = f"{candidate}.svg"
         return sanitize_func(candidate)
+
+
+class PlotRequest(BaseModel):
+    page: str = "a5"
+    s_down: int = 30
+    s_up: int = 70
+    p_down: int = 40
+    p_up: int = 70
+    handling: int = 1
+    speed: int = 70
+    brushless: bool = False
