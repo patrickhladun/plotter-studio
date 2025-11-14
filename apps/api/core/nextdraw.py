@@ -2,7 +2,7 @@ import os
 import re
 import shlex
 import shutil
-import subprocess 
+import subprocess
 import tempfile
 import threading
 import time
@@ -12,9 +12,20 @@ from pathlib import Path
 from typing import Any, Optional, Sequence
 from fastapi import HTTPException
 
+try:
+    from svgpathtools import svg2paths2
+except ImportError:
+    svg2paths2 = None
+
 from core.state import JOB
+from core.utils import _sanitize_filename
 
 logger = logging.getLogger("plotterstudio.api")
+
+# Regex patterns for parsing nextdraw output
+PROGRESS_RE = re.compile(r"(?:Progress|Percent complete):\s*([0-9.]+)\s*%", re.IGNORECASE)
+TIME_RE = re.compile(r"(?:Elapsed|Time):\s*(\d+):(\d+)(?::(\d+))?", re.IGNORECASE)
+DIST_RE = re.compile(r"(?:Distance|draw):\s*([0-9.]+)\s*([a-zA-Z]*)", re.IGNORECASE)
 
 
 def _format_command(args):

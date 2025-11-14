@@ -241,8 +241,24 @@ if [ -f "$VENV_LAUNCHER" ]; then
   sed -i 's/from main import cli/from apps.api.main import cli/' "$VENV_LAUNCHER" || true
 fi
 
+# --- Add to shell profile ---
+SHELL_RC="$HOME/.bashrc"
+if [ -f "$SHELL_RC" ]; then
+  if ! grep -q "PLOTTERSTUDIO_HOME" "$SHELL_RC"; then
+    echo "" >> "$SHELL_RC"
+    echo "# Plotter Studio environment" >> "$SHELL_RC"
+    echo "export PLOTTERSTUDIO_HOME=$APP_DIR" >> "$SHELL_RC"
+    echo "[setup] Added PLOTTERSTUDIO_HOME to $SHELL_RC"
+  else
+    echo "[setup] PLOTTERSTUDIO_HOME already in $SHELL_RC"
+  fi
+fi
+
 echo "[done] Installation complete."
 echo "Start the combined API + dashboard with:"
 echo "  plotterstudio run"
 echo "  (legacy) sdraw run"
 echo "Then open: http://${IP_ADDRESS}:2222"
+echo ""
+echo "NOTE: To use PLOTTERSTUDIO_HOME in current shell, run:"
+echo "  source ~/.bashrc"

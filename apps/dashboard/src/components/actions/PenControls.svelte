@@ -85,7 +85,7 @@
     clearStatus();
     try {
       motorsBusy = true;
-      const endpoint = enable ? 'enable_motors' : 'disable_motors';
+      const endpoint = enable ? 'plot/enable_motors' : 'plot/disable_motors';
       const response = await fetch(`${API_BASE_URL}/${endpoint}`, { method: 'POST' });
       const text = await response.text();
       let payload: CommandPayload | null = null;
