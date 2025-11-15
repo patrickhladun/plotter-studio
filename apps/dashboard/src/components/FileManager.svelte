@@ -8,10 +8,16 @@
   } from '../lib/filesApi';
   import { PRINT_DEFAULTS, BASE_PLOT_SETTINGS } from '../defaults/printPresets';
   import { DEVICE_DEFAULTS, BASE_DEVICE_SETTINGS } from '../defaults/devicePresets';
-  import { showCommandToast } from '../lib/toastStore';
+  import { showCommandToast, pushToast } from '../lib/toastStore';
   import PenControls from './actions/PenControls.svelte';
+  import PenUp from './actions/PenUp.svelte';
+  import PenDown from './actions/PenDown.svelte';
+  import EnableMotors from './actions/EnableMotors.svelte';
   import DisableMotors from './actions/DisableMotors.svelte';
+  import WalkHome from './actions/WalkHome.svelte';
   import GetStatus from './actions/GetStatus.svelte';
+  import StartPlot from './actions/StartPlot.svelte';
+  import RefreshStatus from './actions/RefreshStatus.svelte';
 
   const NEXTDRAW_MODELS = [
     'AxiDraw V2, V3, or SE/A4',
@@ -101,8 +107,6 @@
   let rotating = false;
   let renaming = false;
   let stopping = false;
-  let statusMessage: string | null = null;
-  let statusTone: 'success' | 'error' | null = null;
   let dragActive = false;
   let renameValue = '';
   let plotProgress: number | null = null;
@@ -171,15 +175,6 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
   };
 
 
-  const setStatus = (message: string, tone: 'success' | 'error') => {
-    statusMessage = message;
-    statusTone = tone;
-  };
-
-  const clearStatus = () => {
-    statusMessage = null;
-    statusTone = null;
-  };
 
   const clearPreview = () => {
     previewLoading = false;
@@ -237,7 +232,7 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
     } catch (error) {
       console.error('Failed to load files', error);
       const message = error instanceof Error ? error.message : 'Failed to load files';
-      setStatus(message, 'error');
+      pushToast(message, { tone: 'error' });
     } finally {
       isLoading = false;
     }
@@ -317,7 +312,7 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
   const handleSaveProfile = async () => {
     const trimmed = newProfileName.trim() || selectedProfile;
     if (!trimmed) {
-      setStatus('Provide a name for the settings preset.', 'error');
+      pushToast('Provide a name for the settings preset.', { tone: 'error' });
       return;
     }
     try {
@@ -327,32 +322,32 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
       writeLocalPresets(PRINT_STORAGE_KEY, overrides);
       selectedProfile = trimmed;
       newProfileName = '';
-      setStatus(`Saved settings "${trimmed}"`, 'success');
+      pushToast(`Saved settings "${trimmed}"`, { tone: 'success' });
       await loadProfiles();
     } catch (error) {
       console.error('Failed to save settings', error);
       const message = error instanceof Error ? error.message : 'Failed to save settings';
-      setStatus(message, 'error');
+      pushToast(message, { tone: 'error' });
     }
   };
 
   const handleDeleteProfile = async () => {
     const profile = plotProfiles.find((item) => item.name === selectedProfile);
     if (!profile || profile.protected) {
-      setStatus('Cannot delete the default settings preset.', 'error');
+      pushToast('Cannot delete the default settings preset.', { tone: 'error' });
       return;
     }
     try {
       const overrides = readLocalPresets<PlotSettings>(PRINT_STORAGE_KEY);
       delete overrides[profile.name];
       writeLocalPresets(PRINT_STORAGE_KEY, overrides);
-      setStatus(`Deleted settings "${profile.name}"`, 'success');
+      pushToast(`Deleted settings "${profile.name}"`, { tone: 'success' });
       selectedProfile = 'AxiDraw';
       await loadProfiles(true);
     } catch (error) {
       console.error('Failed to delete settings', error);
       const message = error instanceof Error ? error.message : 'Failed to delete settings';
-      setStatus(message, 'error');
+      pushToast(message, { tone: 'error' });
     }
   };
 
@@ -447,7 +442,7 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
   const handleDeviceSave = async () => {
     const trimmed = newDeviceName.trim() || selectedDeviceProfile;
     if (!trimmed) {
-      setStatus('Provide a name for the device preset.', 'error');
+      pushToast('Provide a name for the device preset.', { tone: 'error' });
       return;
     }
     try {
@@ -457,35 +452,35 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
       newDeviceName = '';
       selectedDeviceProfile = trimmed;
       await loadDeviceProfiles();
-      setStatus(`Saved device "${trimmed}"`, 'success');
+      pushToast(`Saved device "${trimmed}"`, { tone: 'success' });
     } catch (error) {
       console.error('Failed to save device settings', error);
       const message = error instanceof Error ? error.message : 'Failed to save device settings';
-      setStatus(message, 'error');
+      pushToast(message, { tone: 'error' });
     }
   };
 
   const handleDeviceDelete = async () => {
     const profile = deviceProfiles.find((item) => item.name === selectedDeviceProfile);
     if (!profile) {
-      setStatus('Select a device preset to delete.', 'error');
+      pushToast('Select a device preset to delete.', { tone: 'error' });
       return;
     }
     if (profile.protected) {
-      setStatus('Repo-managed device presets cannot be deleted.', 'error');
+      pushToast('Repo-managed device presets cannot be deleted.', { tone: 'error' });
       return;
     }
     try {
       const overrides = readLocalPresets<DeviceSettings>(DEVICE_STORAGE_KEY);
       delete overrides[profile.name];
       writeLocalPresets(DEVICE_STORAGE_KEY, overrides);
-      setStatus(`Deleted device "${profile.name}"`, 'success');
+      pushToast(`Deleted device "${profile.name}"`, { tone: 'success' });
       selectedDeviceProfile = 'Default Device';
       await loadDeviceProfiles(true);
     } catch (error) {
       console.error('Failed to delete device settings', error);
       const message = error instanceof Error ? error.message : 'Failed to delete device settings';
-      setStatus(message, 'error');
+      pushToast(message, { tone: 'error' });
     }
   };
 
@@ -504,7 +499,6 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
       return;
     }
 
-    clearStatus();
     let saved: FileMeta | null = null;
     const startTime = Date.now();
     try {
@@ -513,7 +507,7 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
       saved = await filesApi.upload(file);
       const duration = Date.now() - startTime;
       console.log('[FileManager] Upload successful:', saved?.name, `(${duration}ms)`);
-      setStatus(`Uploaded ${saved?.name ?? file.name}`, 'success');
+      pushToast(`Uploaded ${saved?.name ?? file.name}`, { tone: 'success' });
     } catch (error) {
       const duration = Date.now() - startTime;
       console.error('[FileManager] Upload failed after', duration, 'ms', error);
@@ -541,7 +535,7 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
         displayMessage = 'Cannot connect to API server - check if it\'s running on port 2222';
       }
       
-      setStatus(`Upload failed: ${displayMessage}${errorUrl ? ` (${errorUrl})` : ''}`, 'error');
+      pushToast(`Upload failed: ${displayMessage}${errorUrl ? ` (${errorUrl})` : ''}`, { tone: 'error' });
       return;
     } finally {
       uploadInProgress = false;
@@ -551,7 +545,7 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
       fetchFiles(preferred).catch((error) => {
         console.error('Post-upload refresh failed', error);
         const message = error instanceof Error ? error.message : 'Failed to refresh file list';
-        setStatus(message, 'error');
+        pushToast(message, { tone: 'error' });
       });
     }, 0);
   };
@@ -592,90 +586,46 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
     }
   };
 
-  const handlePlot = async () => {
-    if (!selectedFile) {
-      setStatus('Select a file before starting a plot.', 'error');
-      return;
-    }
+  const handlePlotStart = () => {
+    plotting = true;
+    plotRunning = true;
+    plotProgress = 0;
+    plotElapsedSeconds = 0;
+    plotDistanceMm = previewDistanceMm;
+  };
 
-    clearStatus();
-
-    try {
-      plotting = true;
-      plotRunning = true;
-      plotProgress = 0;
-      plotElapsedSeconds = 0;
-      plotDistanceMm = previewDistanceMm;
-      const payload = await filesApi.plot(selectedFile, buildPlotPayload());
-
-      const pid = typeof payload?.pid === 'number' ? payload.pid : undefined;
-      const completed = Boolean(payload?.completed);
-      const rawOutput = payload?.output;
-      const outputSnippet = typeof rawOutput === 'string'
-        ? (() => {
-            const trimmed = rawOutput.trim();
-            if (!trimmed) {
-              return '';
-            }
-            const lines = trimmed.split('\n').map((line) => line.trim()).filter(Boolean);
-            if (lines.length === 0) {
-              return '';
-            }
-            if (lines.length >= 2 && lines[0].endsWith(':')) {
-              return `${lines[0]} ${lines[1]}`;
-            }
-            return lines[0];
-          })()
-        : '';
-
-      if (completed) {
-        const summary = outputSnippet ? ` (${outputSnippet})` : '';
-        setStatus(`Plot completed immediately for ${selectedFile}${summary}`, 'success');
-        plotRunning = false;
-        plotProgress = 100;
-        plotElapsedSeconds = 0;
-        pollStatus();
-        if (payload && typeof payload.cmd === 'string') {
-          showCommandToast('Plot command (offline)', payload.cmd);
-        }
-        return;
-      }
-
-      if (payload && typeof payload.cmd === 'string') {
-        showCommandToast(`Plot command${pid ? ` (pid ${pid})` : ''}`, payload.cmd);
-      }
-      const pidLabel = pid ? ` (pid ${pid})` : '';
-      setStatus(`Plot started for ${selectedFile}${pidLabel}`, 'success');
-      pollStatus();
-    } catch (error) {
-      console.error('Plot failed', error);
-      const message = error instanceof Error ? error.message : 'Plot start failed';
-      setStatus(message, 'error');
+  const handlePlotComplete = (payload: any) => {
+    plotting = false;
+    const completed = Boolean(payload?.completed);
+    if (completed) {
       plotRunning = false;
-      plotProgress = null;
-      plotElapsedSeconds = null;
-    } finally {
-      plotting = false;
+      plotProgress = 100;
+      plotElapsedSeconds = 0;
     }
+  };
+
+  const handlePlotError = (error: string) => {
+    plotting = false;
+    plotRunning = false;
+    plotProgress = null;
+    plotElapsedSeconds = null;
   };
 
   const handleRotate = async (angle: number) => {
     if (!selectedFile) {
-      setStatus('Select a file before rotating.', 'error');
+      pushToast('Select a file before rotating.', { tone: 'error' });
       return;
     }
-
-    clearStatus();
 
     try {
       rotating = true;
       await filesApi.rotate(selectedFile, angle);
       await fetchFiles(selectedFile);
-      setStatus(`Rotated ${selectedFile}`, 'success');
+      pushToast(`Rotated ${selectedFile}`, { tone: 'success' });
     } catch (error) {
       console.error('Rotation failed', error);
       const message = error instanceof Error ? error.message : 'Rotation failed';
-      setStatus(message, 'error');
+      pushToast(message, { tone: 'error' });
     } finally {
       rotating = false;
     }
@@ -683,17 +633,15 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
 
   const handleRename = async () => {
     if (!selectedFile) {
-      setStatus('Select a file before renaming.', 'error');
+      pushToast('Select a file before renaming.', { tone: 'error' });
       return;
     }
 
     const trimmed = renameValue.trim();
     if (!trimmed) {
-      setStatus('Filename cannot be empty.', 'error');
+      pushToast('Filename cannot be empty.', { tone: 'error' });
       return;
     }
-
-    clearStatus();
 
     try {
       renaming = true;
@@ -701,29 +649,28 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
       selectedFile = updated.name;
       renameValue = updated.name;
       await fetchFiles(updated.name);
-      setStatus(`Renamed to ${updated.name}`, 'success');
+      pushToast(`Renamed to ${updated.name}`, { tone: 'success' });
     } catch (error) {
       console.error('Rename failed', error);
       const message = error instanceof Error ? error.message : 'Rename failed';
-      setStatus(message, 'error');
+      pushToast(message, { tone: 'error' });
     } finally {
       renaming = false;
     }
   };
 
   const handleStopPlot = async () => {
-    clearStatus();
     try {
       stopping = true;
       await filesApi.cancelPlot();
-      setStatus('Plot canceled.', 'success');
+      pushToast('Plot canceled.', { tone: 'success' });
       plotRunning = false;
       plotProgress = null;
       pollStatus();
     } catch (error) {
       console.error('Stop failed', error);
       const message = error instanceof Error ? error.message : 'Failed to stop plot';
-      setStatus(message, 'error');
+      pushToast(message, { tone: 'error' });
     } finally {
       stopping = false;
     }
@@ -743,8 +690,8 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
         plotDistanceMm = previewDistanceMm;
       }
       const errorMessage = typeof data?.error === 'string' ? data.error : null;
-      if (errorMessage && statusMessage !== errorMessage) {
-        setStatus(errorMessage, 'error');
+      if (errorMessage) {
+        pushToast(errorMessage, { tone: 'error' });
         plotRunning = false;
         plotProgress = null;
         plotElapsedSeconds = null;
@@ -824,19 +771,18 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
       dispatch('preview', svg);
     } catch (error) {
       console.error('Preview failed', error);
-      setStatus('Preview failed', 'error');
+      pushToast('Preview failed', { tone: 'error' });
     }
   }
 
   const handleDelete = async (name: string) => {
-    clearStatus();
     try {
       await filesApi.remove(name);
-      setStatus(`Deleted ${name}`, 'success');
+      pushToast(`Deleted ${name}`, { tone: 'success' });
       await fetchFiles();
     } catch (error) {
       console.error('Delete failed', error);
-      setStatus('Delete failed', 'error');
+      pushToast('Delete failed', { tone: 'error' });
     }
   };
 
@@ -947,11 +893,6 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
   <div class="mb-3 text-center text-sm font-semibold uppercase tracking-wide text-neutral-100">
     Plotter Studio
   </div>
-  {#if statusMessage}
-    <p class={`mb-3 text-xs ${statusTone === 'success' ? 'text-green-400' : 'text-red-400'}`}>
-      {statusMessage}
-    </p>
-  {/if}
 
   <div class="flex h-full">
     <nav class="flex w-12 flex-col items-center gap-2 py-2 bg-neutral-900/40">
@@ -1113,21 +1054,18 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
           </div>
 
           <div class="flex flex-wrap gap-2">
-            <button
-              class="bg-green-500 py-1 px-2 text-xs rounded cursor-pointer hover:bg-green-400"
-              type="button"
-              on:click={handlePlot}
-              disabled={plotting || rotating || plotRunning}
-            >
-              {plotting ? 'Starting…' : 'Start Plot'}
-            </button>
-            <button
-              class="text-blue-300 hover:text-blue-200 text-xs"
-              type="button"
-              on:click={pollStatus}
-            >
-              Refresh status
-            </button>
+            <StartPlot
+              selectedFile={selectedFile}
+              plotSettings={buildPlotPayload()}
+              plotting={plotting}
+              plotRunning={plotRunning}
+              rotating={rotating}
+              onPlotStart={handlePlotStart}
+              onPlotComplete={handlePlotComplete}
+              onPlotError={handlePlotError}
+              onStatusPoll={pollStatus}
+            />
+            <RefreshStatus onRefresh={pollStatus} loading={false} />
             {#if plotRunning}
               <button
                 class="bg-yellow-500 py-1 px-2 text-xs rounded cursor-pointer hover:bg-yellow-400"
@@ -1400,8 +1338,17 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
         </div>
       {:else}
         <div class="space-y-3">
+          <div class="py-4 border-b border-neutral-600 text-xs text-neutral-200">
+            <h2 class="font-semibold mb-2 text-sm text-white">Manual Controls</h2>
+            <div class="flex flex-wrap gap-2">
+              <PenUp model={deviceNextdrawModel} />
+              <PenDown model={deviceNextdrawModel} />
+              <EnableMotors model={deviceNextdrawModel} />
+              <DisableMotors model={deviceNextdrawModel} />
+              <WalkHome />
+            </div>
+          </div>
           <PenControls model={deviceNextdrawModel} />
-          <DisableMotors model={deviceNextdrawModel} />
           <GetStatus />
         </div>
       {/if}

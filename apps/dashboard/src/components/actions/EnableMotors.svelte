@@ -8,14 +8,14 @@
 
   let motorsBusy = false;
 
-  const disableMotors = async () => {
+  const enableMotors = async () => {
     try {
       motorsBusy = true;
-      const command = buildUtilityCommand(model, 'disable_xy');
-      const result = await executeCommand(command, 'Disable motors');
+      const command = buildUtilityCommand(model, 'enable_xy');
+      const result = await executeCommand(command, 'Enable motors');
 
       if (!result.success) {
-        pushToast(result.error || 'Failed to disable motors', { tone: 'error' });
+        pushToast(result.error || 'Failed to enable motors', { tone: 'error' });
         return;
       }
 
@@ -23,21 +23,22 @@
       const stdout = payload && typeof payload.stdout === 'string' ? payload.stdout : null;
       const inferred = stdout && stdout.trim().length > 0
         ? stdout.trim().split('\n')[0]
-        : 'Motors disabled';
+        : 'Motors enabled';
       pushToast(inferred, { tone: 'success' });
     } catch (error) {
       console.error('Error:', error);
-      pushToast('Motor disable failed', { tone: 'error' });
+      pushToast('Motor enable failed', { tone: 'error' });
     } finally {
       motorsBusy = false;
     }
   };
 </script>
 
-<Button on:click={disableMotors} disabled={motorsBusy}>
+<Button on:click={enableMotors} disabled={motorsBusy}>
   {#if motorsBusy}
-    Disabling...
+    Enabling...
   {:else}
-    Disable Motors
+    Enable Motors
   {/if}
 </Button>
+

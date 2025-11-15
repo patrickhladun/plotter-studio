@@ -75,12 +75,20 @@ export function buildNextdrawCommand(
 
 /**
  * Build a utility command (e.g., toggle, enable_xy, disable_xy, walk_home)
+ * @param model - Optional model to include -L flag. If null/undefined, no model flag is added.
  */
 export function buildUtilityCommand(
   model: string | null | undefined,
   command: string
 ): string {
   return buildNextdrawCommand(model, "-m", "utility", "-M", command);
+}
+
+/**
+ * Build a utility command without model flag (e.g., walk_home)
+ */
+export function buildUtilityCommandWithoutModel(command: string): string {
+  return buildNextdrawCommand(null, "-m", "utility", "-M", command);
 }
 
 /**
