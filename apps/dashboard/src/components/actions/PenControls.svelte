@@ -1,20 +1,10 @@
 <script lang="ts">
   import Button from '../Button/Button.svelte';
-  import { API_BASE_URL } from '../../lib/rpiApi';
-  import { showCommandToast } from '../../lib/toastStore';
   import { buildUtilityCommand, buildManualCommand } from '../../lib/nextdrawCommands';
+  import { executeCommand } from '../../lib/commandExecutor';
 
   export let model: string = 'Bantam Tools NextDraw™ 8511 (Default)';
 
-  type CommandPayload = {
-    ok?: boolean;
-    command?: string;
-    stdout?: string;
-    stderr?: string;
-    detail?: unknown;
-    state?: string;
-    segments?: CommandPayload[];
-  };
 
   let xInput: string | number | null = '';
   let yInput: string | number | null = '';
@@ -39,43 +29,14 @@
     try {
       penBusy = true;
       const command = buildUtilityCommand(model, 'toggle');
-      const formData = new FormData();
-      formData.append('command', command);
-      const response = await fetch(`${API_BASE_URL}/plot`, { 
-        method: 'POST',
-        body: formData,
-      });
-      const text = await response.text();
-      let payload: CommandPayload | null = null;
-      try {
-        payload = text ? JSON.parse(text) : null;
-      } catch (parseError) {
-        payload = null;
-      }
-      const returnedCommand = payload && typeof payload.command === 'string' ? payload.command : null;
-      if (returnedCommand) {
-        showCommandToast('Pen toggle', returnedCommand);
-      } else {
-        showCommandToast('Pen toggle', command);
-      }
-      if (!response.ok) {
-        console.error('API error:', response.statusText);
-        let message = text || 'Failed to toggle pen';
-        if (payload?.detail) {
-          message = typeof payload.detail === 'string' ? payload.detail : JSON.stringify(payload.detail);
-        }
-        setStatus(message, 'error');
+      const result = await executeCommand(command, 'Pen toggle');
+
+      if (!result.success) {
+        setStatus(result.error || 'Pen toggle failed', 'error');
         return;
       }
 
-      if (payload && payload.ok === false) {
-        const stdout = typeof payload.stdout === 'string' ? payload.stdout.trim() : '';
-        const stderr = typeof payload.stderr === 'string' ? payload.stderr.trim() : '';
-        const message = stderr || stdout || 'Pen toggle failed';
-        setStatus(message, 'error');
-        return;
-      }
-
+      const payload = result.payload;
       const state = payload && typeof payload.state === 'string' ? payload.state : null;
       const stdout = payload && typeof payload.stdout === 'string' ? payload.stdout : null;
       const inferredMessage = state
@@ -85,7 +46,7 @@
           : 'Pen toggled';
       setStatus(inferredMessage, 'success');
     } catch (error) {
-      console.error('API error:', error);
+      console.error('Error:', error);
       setStatus('Pen toggle failed', 'error');
     } finally {
       penBusy = false;
@@ -97,43 +58,14 @@
     try {
       motorsBusy = true;
       const command = buildUtilityCommand(model, enable ? 'enable_xy' : 'disable_xy');
-      const formData = new FormData();
-      formData.append('command', command);
-      const response = await fetch(`${API_BASE_URL}/plot`, { 
-        method: 'POST',
-        body: formData,
-      });
-      const text = await response.text();
-      let payload: CommandPayload | null = null;
-      try {
-        payload = text ? JSON.parse(text) : null;
-      } catch (parseError) {
-        payload = null;
-      }
-      const returnedCommand = payload && typeof payload.command === 'string' ? payload.command : null;
-      if (returnedCommand) {
-        showCommandToast(enable ? 'Enable motors' : 'Disable motors', returnedCommand);
-      } else {
-        showCommandToast(enable ? 'Enable motors' : 'Disable motors', command);
-      }
-      if (!response.ok) {
-        console.error('API error:', response.statusText);
-        let message = text || `Failed to ${enable ? 'enable' : 'disable'} motors`;
-        if (payload?.detail) {
-          message = typeof payload.detail === 'string' ? payload.detail : JSON.stringify(payload.detail);
-        }
-        setStatus(message, 'error');
+      const result = await executeCommand(command, enable ? 'Enable motors' : 'Disable motors');
+
+      if (!result.success) {
+        setStatus(result.error || `Failed to ${enable ? 'enable' : 'disable'} motors`, 'error');
         return;
       }
 
-      if (payload && payload.ok === false) {
-        const stdout = typeof payload.stdout === 'string' ? payload.stdout.trim() : '';
-        const stderr = typeof payload.stderr === 'string' ? payload.stderr.trim() : '';
-        const message = stderr || stdout || `Failed to ${enable ? 'enable' : 'disable'} motors`;
-        setStatus(message, 'error');
-        return;
-      }
-
+      const payload = result.payload;
       const stdout = payload && typeof payload.stdout === 'string' ? payload.stdout : null;
       const inferred = stdout && stdout.trim().length > 0
         ? stdout.trim().split('\n')[0]
@@ -142,7 +74,7 @@
           : 'Motors disabled';
       setStatus(inferred, 'success');
     } catch (error) {
-      console.error('API error:', error);
+      console.error('Error:', error);
       setStatus(`Motor ${enable ? 'enable' : 'disable'} failed`, 'error');
     } finally {
       motorsBusy = false;
@@ -180,37 +112,12 @@
     try {
       isMoving = true;
       const command = buildManualCommand(model, `walk ${xValue} ${yValue}`);
-      const formData = new FormData();
-      formData.append('command', command);
-      const response = await fetch(`${API_BASE_URL}/plot`, {
-        method: 'POST',
-        body: formData,
-      });
-      const text = await response.text();
-      let payload: CommandPayload | null = null;
-      try {
-        payload = text ? JSON.parse(text) : null;
-      } catch (parseError) {
-        payload = null;
-      }
-      const returnedCommand = payload && typeof payload.command === 'string' ? payload.command : null;
-      if (returnedCommand) {
-        showCommandToast('Move pen', returnedCommand);
-      } else {
-        showCommandToast('Move pen', command);
-      }
+      const result = await executeCommand(command, 'Move pen');
 
-      if (!response.ok) {
-        console.error('API error:', response.statusText);
-        const message = typeof payload?.stderr === 'string'
-          ? payload.stderr
-          : typeof payload?.detail === 'string'
-            ? payload.detail
-            : 'Move command failed';
-        setStatus(message, 'error');
+      if (!result.success) {
+        setStatus(result.error || 'Move command failed', 'error');
         return;
       }
-
 
       setStatus(`Walking to offset (Δx=${xValue}, Δy=${yValue})`, 'success');
     } catch (error) {
@@ -226,43 +133,14 @@
     try {
       isMoving = true;
       const command = buildManualCommand(model, 'walk_home');
-      const formData = new FormData();
-      formData.append('command', command);
-      const response = await fetch(`${API_BASE_URL}/plot`, { 
-        method: 'POST',
-        body: formData,
-      });
-      const text = await response.text();
-      let payload: CommandPayload | null = null;
-      try {
-        payload = text ? JSON.parse(text) : null;
-      } catch (parseError) {
-        payload = null;
-      }
-      const returnedCommand = payload && typeof payload.command === 'string' ? payload.command : null;
-      if (returnedCommand) {
-        showCommandToast('Walk home', returnedCommand);
-      } else {
-        showCommandToast('Walk home', command);
-      }
-      if (!response.ok) {
-        console.error('API error:', response.statusText);
-        let message = text || 'Walk home failed';
-        if (payload?.detail) {
-          message = typeof payload.detail === 'string' ? payload.detail : JSON.stringify(payload.detail);
-        }
-        setStatus(message, 'error');
+      const result = await executeCommand(command, 'Walk home');
+
+      if (!result.success) {
+        setStatus(result.error || 'Walk home failed', 'error');
         return;
       }
 
-      if (payload && payload.ok === false) {
-        const stdout = typeof payload.stdout === 'string' ? payload.stdout.trim() : '';
-        const stderr = typeof payload.stderr === 'string' ? payload.stderr.trim() : '';
-        const message = stderr || stdout || 'Walk home failed';
-        setStatus(message, 'error');
-        return;
-      }
-
+      const payload = result.payload;
       const stdout = payload && typeof payload.stdout === 'string' ? payload.stdout : null;
       const inferred = stdout && stdout.trim().length > 0
         ? stdout.trim().split('\n')[0]
@@ -271,7 +149,7 @@
       yInput = '0';
       setStatus(inferred, 'success');
     } catch (error) {
-      console.error('API error:', error);
+      console.error('Error:', error);
       setStatus('Walk home request failed', 'error');
     } finally {
       isMoving = false;
