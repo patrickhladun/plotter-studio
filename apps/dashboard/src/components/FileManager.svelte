@@ -2,6 +2,7 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import {
     filesApi,
+    type DeviceConfig,
     type DeviceSettings,
     type FileMeta,
     type PlotSettings,
@@ -378,10 +379,10 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
     }
   };
 
-  const handleDevicePresetChange = (event: Event) => {
+  const handleDevicePresetChange = async (event: Event) => {
     const target = event.currentTarget as HTMLSelectElement | null;
     const value = target ? target.value : selectedDeviceProfile;
-    applyDeviceProfile(value);
+    await applyDeviceProfile(value);
     if (selectedFile) {
       fetchPreview(selectedFile);
     }
@@ -395,7 +396,7 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
     }
   };
 
-  const applyDeviceProfile = (name: string) => {
+  const applyDeviceProfile = async (name: string, skipSave = false) => {
     const profile = deviceProfiles.find((item) => item.name === name) ?? deviceProfiles[0];
     const settings = profile?.settings ?? BASE_DEVICE_SETTINGS;
     deviceHost = settings.host ?? BASE_DEVICE_SETTINGS.host ?? 'localhost';
@@ -413,13 +414,55 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
       settings.nextdraw_model ?? BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS[0];
     if (profile) {
       selectedDeviceProfile = profile.name;
+      // Save selected profile to config file (unless this is during initial load)
+      if (!skipSave) {
+        await saveDeviceConfig(profile.name);
+      }
+    }
+  };
+
+  const saveDeviceConfig = async (selectedProfile?: string, defaultOverride?: DeviceSettings | null) => {
+    try {
+      const config: DeviceConfig = {
+        selectedDeviceProfile: selectedProfile ?? selectedDeviceProfile,
+        defaultDeviceOverride: defaultOverride,
+      };
+      await filesApi.saveDeviceConfig(config);
+    } catch (error) {
+      console.error('Failed to save device config:', error);
     }
   };
 
   const loadDeviceProfiles = async (initial = false) => {
     try {
+      // Load config from file
+      let config: DeviceConfig | null = null;
+      try {
+        config = await filesApi.getDeviceConfig();
+      } catch (error) {
+        console.warn('Failed to load device config from file:', error);
+      }
+
+      // Apply defaultDeviceOverride to DEVICE_DEFAULTS if present
+      let effectiveDefaults = { ...DEVICE_DEFAULTS };
+      if (config?.defaultDeviceOverride) {
+        effectiveDefaults['Default Device'] = {
+          ...effectiveDefaults['Default Device'],
+          ...config.defaultDeviceOverride,
+        };
+      }
+
       const overrides = readLocalPresets<DeviceSettings>(DEVICE_STORAGE_KEY);
-      deviceProfiles = mergeProfiles(DEVICE_DEFAULTS, overrides, BASE_DEVICE_SETTINGS, 'Default Device');
+      deviceProfiles = mergeProfiles(effectiveDefaults, overrides, BASE_DEVICE_SETTINGS, 'Default Device');
+      
+      // Use selectedDeviceProfile from config if available
+      if (config?.selectedDeviceProfile) {
+        const hasConfigSelection = deviceProfiles.some((profile) => profile.name === config.selectedDeviceProfile);
+        if (hasConfigSelection) {
+          selectedDeviceProfile = config.selectedDeviceProfile;
+        }
+      }
+
       const hasSelection = deviceProfiles.some((profile) => profile.name === selectedDeviceProfile);
       if (!hasSelection) {
         selectedDeviceProfile =
@@ -428,13 +471,13 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
           'Default Device';
       }
       if (initial || !hasSelection) {
-        applyDeviceProfile(selectedDeviceProfile);
+        await applyDeviceProfile(selectedDeviceProfile, initial);
       }
     } catch (error) {
       console.error('Failed to load device settings', error);
       if (deviceProfiles.length === 0) {
         deviceProfiles = mergeProfiles(DEVICE_DEFAULTS, {}, BASE_DEVICE_SETTINGS, 'Default Device');
-        applyDeviceProfile(deviceProfiles[0].name);
+        await applyDeviceProfile(deviceProfiles[0].name, true);
       }
     }
   };
@@ -446,11 +489,20 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
       return;
     }
     try {
+      const settings = currentDeviceSettings();
       const overrides = readLocalPresets<DeviceSettings>(DEVICE_STORAGE_KEY);
-      overrides[trimmed] = currentDeviceSettings();
+      overrides[trimmed] = settings;
       writeLocalPresets(DEVICE_STORAGE_KEY, overrides);
       newDeviceName = '';
       selectedDeviceProfile = trimmed;
+      
+      // If saving to "Default Device", also save to config file as defaultDeviceOverride
+      if (trimmed === 'Default Device') {
+        await saveDeviceConfig(trimmed, settings);
+      } else {
+        await saveDeviceConfig(trimmed);
+      }
+      
       await loadDeviceProfiles();
       pushToast(`Saved device "${trimmed}"`, { tone: 'success' });
     } catch (error) {

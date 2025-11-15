@@ -24,7 +24,7 @@ import time
 
 from version import __version__
 from core.config import DATA_DIR, cors_origins, OFFLINE_MODE, dashboard_origin_regex
-from routes import svg, plot
+from routes import svg, plot, config
 
 # ============================================================
 # Logging Setup
@@ -85,6 +85,7 @@ app.add_middleware(
 
 app.include_router(svg.router)
 app.include_router(plot.router)
+app.include_router(config.router)
 
 
 # ============================================================

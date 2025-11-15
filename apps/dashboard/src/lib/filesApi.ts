@@ -49,6 +49,11 @@ export type DeviceSettings = {
   nextdraw_model?: string | null;
 };
 
+export type DeviceConfig = {
+  selectedDeviceProfile?: string | null;
+  defaultDeviceOverride?: DeviceSettings | null;
+};
+
 export type PlotStartResponse = {
   ok?: boolean;
   pid?: number;
@@ -275,6 +280,13 @@ export const filesApi = {
     }),
   cancelPlot: () => request<{ ok?: boolean; message?: string }>('/plot/cancel', { method: 'POST' }),
   status: () => request<PlotStatusResponse>('/plot/status'),
+  getDeviceConfig: () => request<DeviceConfig>('/config/device'),
+  saveDeviceConfig: (config: DeviceConfig) =>
+    request<{ ok?: boolean; message?: string }>('/config/device', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify(config),
+    }),
   // Debug helper to test API connectivity
   testConnection: async () => {
     console.log('[filesApi] Testing API connection...');
