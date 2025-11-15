@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
-from typing import Iterable, Sequence
+import re
+from typing import Iterable, Sequence, Optional
 
 
 def _first_existing_path(env_names: Iterable[str], fallback: Path) -> Path:
@@ -38,6 +39,8 @@ DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
     "http://localhost:5173",
     "http://127.0.0.1:2121",
     "http://127.0.0.1:5173",
+    "http://localhost:3131",
+    "http://127.0.0.1:3131",
 )
 
 
@@ -47,3 +50,15 @@ def cors_origins(extra: Sequence[str] | None = None) -> list[str]:
     if extra:
         merged.extend(value for value in extra if value not in merged)
     return merged
+
+
+def dashboard_origin_regex() -> Optional[str]:
+    """Allow dashboard to access API from any host when using its configured port."""
+    port = os.getenv("DASHBOARD_PORT")
+    if not port:
+        return None
+    port = port.strip()
+    if not port:
+        return None
+    escaped = re.escape(port)
+    return rf"^https?://[^/]+:{escaped}$"

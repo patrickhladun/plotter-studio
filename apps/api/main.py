@@ -21,7 +21,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from version import __version__
-from core.config import DATA_DIR, cors_origins, OFFLINE_MODE
+from core.config import DATA_DIR, cors_origins, OFFLINE_MODE, dashboard_origin_regex
 from routes import svg, plot
 
 # ============================================================
@@ -52,6 +52,7 @@ app = FastAPI(title="Plotter Studio", version=__version__)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins(),
+    allow_origin_regex=dashboard_origin_regex(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
