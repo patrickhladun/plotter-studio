@@ -1400,8 +1400,8 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
         </div>
       {:else}
         <div class="space-y-3">
-          <PenControls />
-          <DisableMotors />
+          <PenControls model={deviceNextdrawModel} />
+          <DisableMotors model={deviceNextdrawModel} />
           <GetStatus />
         </div>
       {/if}

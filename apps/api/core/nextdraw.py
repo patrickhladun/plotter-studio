@@ -28,6 +28,39 @@ PROGRESS_RE = re.compile(r"(?:Progress|Percent complete):\s*([0-9.]+)\s*%", re.I
 TIME_RE = re.compile(r"(?:Elapsed|Time):\s*(\d+):(\d+)(?::(\d+))?", re.IGNORECASE)
 DIST_RE = re.compile(r"(?:Distance|draw):\s*([0-9.]+)\s*([a-zA-Z]*)", re.IGNORECASE)
 
+# Mapping from NextDraw model names to model numbers for -L flag
+NEXTDRAW_MODEL_MAP = {
+    'AxiDraw V2, V3, or SE/A4': 1,
+    'AxiDraw V3/A3 or SE/A3': 2,
+    'AxiDraw V3 XLX': 3,
+    'AxiDraw MiniKit': 4,
+    'AxiDraw SE/A1': 5,
+    'AxiDraw SE/A2': 6,
+    'AxiDraw V3/B6': 7,
+    'Bantam Tools NextDraw™ 8511 (Default)': 8,
+    'Bantam Tools NextDraw™ 1117': 9,
+    'Bantam Tools NextDraw™ 2234': 10,
+}
+
+
+def _get_model_number(model_name: Optional[str]) -> Optional[int]:
+    """Convert NextDraw model name to model number for -L flag."""
+    if not model_name:
+        return None
+    # Check exact match first
+    if model_name in NEXTDRAW_MODEL_MAP:
+        return NEXTDRAW_MODEL_MAP[model_name]
+    # Check if it's already a number (as string)
+    try:
+        model_num = int(model_name)
+        if 1 <= model_num <= 10:
+            return model_num
+    except (ValueError, TypeError):
+        pass
+    # Default to model 8 (Bantam Tools NextDraw™ 8511) if not found
+    logger.warning("Unknown NextDraw model '%s', defaulting to model 8", model_name)
+    return 8
+
 
 def _format_command(args):
     """Return a clean string version of the nextdraw command."""
@@ -65,8 +98,54 @@ def _nextdraw_base() -> list[str]:
     return ["nextdraw"]
 
 
-def _run_manual(command: str) -> subprocess.CompletedProcess[str]:
-    args = [*_nextdraw_base(), "--mode", "manual", "--manual_cmd", command]
+def _run_command(command: str) -> subprocess.CompletedProcess[str]:
+    """Execute a raw nextdraw command string. The command should already include all flags.
+    
+    The command string from the dashboard will start with 'nextdraw', but we replace it
+    with the configured base command (which may be a custom path).
+    """
+    # Parse the command string into arguments
+    parts = shlex.split(command)
+    
+    # Replace 'nextdraw' with the configured base command
+    if parts and parts[0] == 'nextdraw':
+        args = [*_nextdraw_base(), *parts[1:]]
+    else:
+        # If it doesn't start with 'nextdraw', use as-is (might be a full path)
+        args = parts
+    
+    logger.info("Running nextdraw command: %s", _format_command(args))
+    if OFFLINE_MODE:
+        logger.info("Offline mode: skipping command execution.")
+        return _offline_completed_process(args, "command")
+    try:
+        return subprocess.run(
+            args,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="nextdraw binary not found; set PLOTTERSTUDIO_NEXTDRAW (or legacy SYNTHDRAW_AXICLI) to the full path",
+        ) from exc
+
+
+def _run_manual(command: str, model: Optional[str] = None) -> subprocess.CompletedProcess[str]:
+    # Get model from parameter, JOB state, or environment
+    resolved_model = model or JOB.get("model") or (
+        os.getenv("PLOTTERSTUDIO_MODEL")
+        or os.getenv("PLOTTERSTUDIO_MODEL_NAME")
+        or os.getenv("SYNTHDRAW_MODEL")
+        or os.getenv("SYNTHDRAW_MODEL_NAME")
+    )
+    model_number = _get_model_number(resolved_model)
+    
+    args = [*_nextdraw_base()]
+    if model_number:
+        args.append(f"-L{model_number}")
+    args.extend(["--mode", "manual", "--manual_cmd", command])
     logger.info("Running nextdraw manual command: %s", _format_command(args))
     if OFFLINE_MODE:
         logger.info("Offline mode: skipping manual command execution.")
@@ -85,8 +164,20 @@ def _run_manual(command: str) -> subprocess.CompletedProcess[str]:
         ) from exc
 
 
-def _run_utility(command: str, extra_args: Optional[Sequence[str]] = None) -> subprocess.CompletedProcess[str]:
-    args = [*_nextdraw_base(), "-m", "utility", "-M", command]
+def _run_utility(command: str, extra_args: Optional[Sequence[str]] = None, model: Optional[str] = None) -> subprocess.CompletedProcess[str]:
+    # Get model from parameter, JOB state, or environment
+    resolved_model = model or JOB.get("model") or (
+        os.getenv("PLOTTERSTUDIO_MODEL")
+        or os.getenv("PLOTTERSTUDIO_MODEL_NAME")
+        or os.getenv("SYNTHDRAW_MODEL")
+        or os.getenv("SYNTHDRAW_MODEL_NAME")
+    )
+    model_number = _get_model_number(resolved_model)
+    
+    args = [*_nextdraw_base()]
+    if model_number:
+        args.append(f"-L{model_number}")
+    args.extend(["-m", "utility", "-M", command])
     if extra_args:
         args.extend(str(item) for item in extra_args)
     logger.info("Running nextdraw cli command: %s", _format_command(args))
@@ -207,16 +298,18 @@ def _preview_via_nextdraw(
         logger.info("Offline mode: skipping preview run for %s", svg_path)
         return None, _estimate_distance_mm(svg_path)
 
-    args: list[str] = [*_nextdraw_base(), str(svg_path), "--preview", "--report_time"]
-
     resolved_model = model or (
         os.getenv("PLOTTERSTUDIO_MODEL")
         or os.getenv("PLOTTERSTUDIO_MODEL_NAME")
         or os.getenv("SYNTHDRAW_MODEL")
         or os.getenv("SYNTHDRAW_MODEL_NAME")
     )
-    if resolved_model:
-        args.extend(["--model", resolved_model])
+    model_number = _get_model_number(resolved_model)
+    
+    args: list[str] = [*_nextdraw_base()]
+    if model_number:
+        args.append(f"-L{model_number}")
+    args.extend([str(svg_path), "--preview", "--report_time"])
 
     effective_handling = None if handling == 5 else handling
     if effective_handling is not None:
@@ -376,8 +469,12 @@ def _start_plot_from_path(
         except FileNotFoundError:
             logger.warning("vpype command not found; skipping centering step")
 
-    cmd = [
-        *_nextdraw_base(),
+    model_number = _get_model_number(model)
+    
+    cmd = [*_nextdraw_base()]
+    if model_number:
+        cmd.append(f"-L{model_number}")
+    cmd.extend([
         str(use_path),
         "--speed_pendown",
         str(s_down),
@@ -388,10 +485,7 @@ def _start_plot_from_path(
         "--pen_pos_up",
         str(p_up),
         "--progress",
-    ]
-
-    if model:
-        cmd.extend(["--model", model])
+    ])
 
     effective_handling = None if handling == 5 else handling
     if effective_handling is not None:
@@ -418,6 +512,8 @@ def _start_plot_from_path(
         JOB["distance_mm"] = JOB.get("distance_mm") or _estimate_distance_mm(use_path)
         JOB["elapsed_override"] = 0.0
         JOB["error"] = None
+        # Store the model in JOB state for offline mode too
+        JOB["model"] = model
         return {
             "ok": True,
             "pid": 0,
@@ -444,6 +540,8 @@ def _start_plot_from_path(
     JOB["progress"] = 0.0
     JOB["start_time"] = time.time()
     JOB["end_time"] = None
+    # Store the model in JOB state so manual/utility commands can use it
+    JOB["model"] = model
     if JOB.get("distance_mm") is None:
         JOB["distance_mm"] = _estimate_distance_mm(use_path)
     JOB["elapsed_override"] = None

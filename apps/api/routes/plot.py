@@ -1,15 +1,11 @@
-import os
-import tempfile
 import time
 import logging
-from pathlib import Path
 
-from fastapi import APIRouter, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Form, HTTPException
 
 from core.nextdraw import (
+    _run_command,
     _run_manual,
-    _run_utility,
-    _start_plot_from_path,
     _manual_response,
 )
 from core.state import JOB
@@ -18,52 +14,12 @@ router = APIRouter(prefix="/plot", tags=["plot"])
 logger = logging.getLogger("plotterstudio.api")
 
 @router.post("")
-async def plot(
-    file: UploadFile,
-    page: str = Form("a5"),
-    s_down: int = Form(30),
-    s_up: int = Form(70),
-    p_down: int = Form(40),
-    p_up: int = Form(70),
-    handling: int = Form(1),
-    speed: int = Form(70),
-    brushless: bool = Form(False),
-    penlift: int | None = Form(None),
-    no_homing: bool = Form(False),
-    model: str | None = Form(None),
-):
-    fd, temp_path = tempfile.mkstemp(suffix=".svg")
-    temp_file = Path(temp_path)
-    try:
-        with os.fdopen(fd, "wb") as handle:
-            while True:
-                chunk = await file.read(1024 * 1024)
-                if not chunk:
-                    break
-                handle.write(chunk)
-
-        if temp_file.stat().st_size == 0:
-            raise HTTPException(status_code=400, detail="Uploaded file is empty")
-
-        return _start_plot_from_path(
-            temp_file,
-            page,
-            s_down,
-            s_up,
-            p_down,
-            p_up,
-            handling,
-            speed,
-            penlift if penlift in {1, 2, 3} else (3 if brushless else None),
-            no_homing,
-            model=model,
-            original_name=file.filename,
-        )
-    finally:
-        try:
-            temp_file.unlink()
-        except FileNotFoundError:
-            pass
+def plot(command: str = Form(...)):
+    """Execute a nextdraw command. The dashboard should build the complete command including all flags."""
+    if not command or not command.strip():
+        raise HTTPException(status_code=400, detail="Command cannot be empty")
+    result = _run_command(command.strip())
+    return _manual_response("command executed", result, error_on_failure=False)
 
 @router.post("/cancel")
 def cancel():
@@ -109,18 +65,3 @@ def status():
         "error": JOB.get("error"),
     }
 
-@router.post("/enable_motors")
-def enable_motors():
-    result = _run_utility("enable_xy")
-    return _manual_response("motors enabled", result, error_on_failure=False)
-
-@router.post("/disable_motors")
-def disable_motors():
-    result = _run_utility("disable_xy")
-    return _manual_response("motors disabled", result, error_on_failure=False)
-
-@router.post("/pen/toggle")
-def pen_toggle():
-    command = ["toggle"]
-    result = _run_utility(*command)
-    return _manual_response("pen toggled", result, error_on_failure=False)

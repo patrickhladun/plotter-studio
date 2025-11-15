@@ -2,6 +2,9 @@
   import Button from '../Button/Button.svelte';
   import { API_BASE_URL } from '../../lib/rpiApi';
   import { showCommandToast } from '../../lib/toastStore';
+  import { buildUtilityCommand, buildManualCommand } from '../../lib/nextdrawCommands';
+
+  export let model: string = 'Bantam Tools NextDraw™ 8511 (Default)';
 
   type CommandPayload = {
     ok?: boolean;
@@ -35,7 +38,13 @@
     clearStatus();
     try {
       penBusy = true;
-      const response = await fetch(`${API_BASE_URL}/plot/pen/toggle`, { method: 'POST' });
+      const command = buildUtilityCommand(model, 'toggle');
+      const formData = new FormData();
+      formData.append('command', command);
+      const response = await fetch(`${API_BASE_URL}/plot`, { 
+        method: 'POST',
+        body: formData,
+      });
       const text = await response.text();
       let payload: CommandPayload | null = null;
       try {
@@ -43,8 +52,10 @@
       } catch (parseError) {
         payload = null;
       }
-      const command = payload && typeof payload.command === 'string' ? payload.command : null;
-      if (command) {
+      const returnedCommand = payload && typeof payload.command === 'string' ? payload.command : null;
+      if (returnedCommand) {
+        showCommandToast('Pen toggle', returnedCommand);
+      } else {
         showCommandToast('Pen toggle', command);
       }
       if (!response.ok) {
@@ -85,8 +96,13 @@
     clearStatus();
     try {
       motorsBusy = true;
-      const endpoint = enable ? 'plot/enable_motors' : 'plot/disable_motors';
-      const response = await fetch(`${API_BASE_URL}/${endpoint}`, { method: 'POST' });
+      const command = buildUtilityCommand(model, enable ? 'enable_xy' : 'disable_xy');
+      const formData = new FormData();
+      formData.append('command', command);
+      const response = await fetch(`${API_BASE_URL}/plot`, { 
+        method: 'POST',
+        body: formData,
+      });
       const text = await response.text();
       let payload: CommandPayload | null = null;
       try {
@@ -94,8 +110,10 @@
       } catch (parseError) {
         payload = null;
       }
-      const command = payload && typeof payload.command === 'string' ? payload.command : null;
-      if (command) {
+      const returnedCommand = payload && typeof payload.command === 'string' ? payload.command : null;
+      if (returnedCommand) {
+        showCommandToast(enable ? 'Enable motors' : 'Disable motors', returnedCommand);
+      } else {
         showCommandToast(enable ? 'Enable motors' : 'Disable motors', command);
       }
       if (!response.ok) {
@@ -159,18 +177,14 @@
       return;
     }
 
-    const params = new URLSearchParams();
-    params.set('x_mm', xValue.toString());
-    params.set('y_mm', yValue.toString());
-
     try {
       isMoving = true;
-      const response = await fetch(`${API_BASE_URL}/walk`, {
+      const command = buildManualCommand(model, `walk ${xValue} ${yValue}`);
+      const formData = new FormData();
+      formData.append('command', command);
+      const response = await fetch(`${API_BASE_URL}/plot`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: params.toString(),
+        body: formData,
       });
       const text = await response.text();
       let payload: CommandPayload | null = null;
@@ -179,17 +193,12 @@
       } catch (parseError) {
         payload = null;
       }
-      const segments: CommandPayload[] = Array.isArray(payload?.segments)
-        ? payload?.segments ?? []
-        : payload
-          ? [payload]
-          : [];
-      segments.forEach((segment) => {
-        const command = segment && typeof segment.command === 'string' ? segment.command : null;
-        if (command) {
-          showCommandToast('Move pen', command);
-        }
-      });
+      const returnedCommand = payload && typeof payload.command === 'string' ? payload.command : null;
+      if (returnedCommand) {
+        showCommandToast('Move pen', returnedCommand);
+      } else {
+        showCommandToast('Move pen', command);
+      }
 
       if (!response.ok) {
         console.error('API error:', response.statusText);
@@ -202,14 +211,6 @@
         return;
       }
 
-      const failingSegment = segments.find((segment) => segment && segment.ok === false);
-      if (failingSegment) {
-        const stdout = typeof failingSegment.stdout === 'string' ? failingSegment.stdout.trim() : '';
-        const stderr = typeof failingSegment.stderr === 'string' ? failingSegment.stderr.trim() : '';
-        const message = stderr || stdout || 'Move command failed';
-        setStatus(message, 'error');
-        return;
-      }
 
       setStatus(`Walking to offset (Δx=${xValue}, Δy=${yValue})`, 'success');
     } catch (error) {
@@ -224,7 +225,13 @@
     clearStatus();
     try {
       isMoving = true;
-      const response = await fetch(`${API_BASE_URL}/walk_home`, { method: 'POST' });
+      const command = buildManualCommand(model, 'walk_home');
+      const formData = new FormData();
+      formData.append('command', command);
+      const response = await fetch(`${API_BASE_URL}/plot`, { 
+        method: 'POST',
+        body: formData,
+      });
       const text = await response.text();
       let payload: CommandPayload | null = null;
       try {
@@ -232,8 +239,10 @@
       } catch (parseError) {
         payload = null;
       }
-      const command = payload && typeof payload.command === 'string' ? payload.command : null;
-      if (command) {
+      const returnedCommand = payload && typeof payload.command === 'string' ? payload.command : null;
+      if (returnedCommand) {
+        showCommandToast('Walk home', returnedCommand);
+      } else {
         showCommandToast('Walk home', command);
       }
       if (!response.ok) {
