@@ -68,8 +68,18 @@
   let previewTimeSeconds: number | null = null;
   let previewDistanceMm: number | null = null;
   let uploadInput: HTMLInputElement | null = null;
-  let plotProfiles: PlotProfile[] = mergeProfiles(PRINT_DEFAULTS, {}, BASE_PLOT_SETTINGS, 'AxiDraw');
-  let selectedProfile: string = 'AxiDraw';
+  let plotProfiles: PlotProfile[] = mergeProfiles(
+    PRINT_DEFAULTS,
+    {},
+    BASE_PLOT_SETTINGS,
+    'AxiDraw'
+  );
+  $: availablePlotProfiles =
+    plotProfiles.length > 0
+      ? plotProfiles
+      : mergeProfiles(PRINT_DEFAULTS, {}, BASE_PLOT_SETTINGS, 'AxiDraw');
+  let selectedProfile: string =
+    plotProfiles.find((profile) => profile.name === 'AxiDraw')?.name ?? 'AxiDraw';
   let newProfileName = '';
   let deviceProfiles: DeviceProfile[] = mergeProfiles(
     DEVICE_DEFAULTS,
@@ -77,7 +87,12 @@
     BASE_DEVICE_SETTINGS,
     'Default Device'
   );
-  let selectedDeviceProfile: string = 'Default Device';
+  $: availableDeviceProfiles =
+    deviceProfiles.length > 0
+      ? deviceProfiles
+      : mergeProfiles(DEVICE_DEFAULTS, {}, BASE_DEVICE_SETTINGS, 'Default Device');
+  let selectedDeviceProfile: string =
+    deviceProfiles.find((profile) => profile.name === 'Default Device')?.name ?? 'Default Device';
   let newDeviceName = '';
 
   let handlingMode = BASE_PLOT_SETTINGS.handling ?? 1;
@@ -192,11 +207,10 @@
       plotProfiles = mergeProfiles(PRINT_DEFAULTS, overrides, BASE_PLOT_SETTINGS, 'AxiDraw');
       const hasSelection = plotProfiles.some((profile) => profile.name === selectedProfile);
       if (!hasSelection) {
-        const fallback =
+        selectedProfile =
           plotProfiles.find((profile) => profile.name === 'AxiDraw')?.name ??
           plotProfiles[0]?.name ??
           'AxiDraw';
-        selectedProfile = fallback;
       }
       if (initial || !hasSelection) {
         applyProfileSettings(selectedProfile);
@@ -342,11 +356,10 @@
       deviceProfiles = mergeProfiles(DEVICE_DEFAULTS, overrides, BASE_DEVICE_SETTINGS, 'Default Device');
       const hasSelection = deviceProfiles.some((profile) => profile.name === selectedDeviceProfile);
       if (!hasSelection) {
-        const fallback =
+        selectedDeviceProfile =
           deviceProfiles.find((profile) => profile.name === 'Default Device')?.name ??
           deviceProfiles[0]?.name ??
           'Default Device';
-        selectedDeviceProfile = fallback;
       }
       if (initial || !hasSelection) {
         applyDeviceProfile(selectedDeviceProfile);
@@ -1026,7 +1039,7 @@
                   bind:value={selectedProfile}
                   on:change={handleProfileChange}
                 >
-                  {#each plotProfiles as profile}
+                  {#each availablePlotProfiles as profile}
                     <option value={profile.name}>{profile.name}</option>
                   {/each}
                 </select>
@@ -1045,7 +1058,7 @@
                 >
                   Save preset
                 </button>
-                {#if plotProfiles.find((profile) => profile.name === selectedProfile)?.protected !== true}
+                {#if availablePlotProfiles.find((profile) => profile.name === selectedProfile)?.protected !== true}
                   <button
                     class="bg-red-500 hover:bg-red-400 text-white text-xs font-medium px-3 py-1 rounded"
                     type="button"
@@ -1173,7 +1186,7 @@
                 bind:value={selectedDeviceProfile}
                 on:change={handleDevicePresetChange}
               >
-                {#each deviceProfiles as profile}
+                {#each availableDeviceProfiles as profile}
                   <option value={profile.name}>{profile.name}</option>
                 {/each}
               </select>
@@ -1192,7 +1205,7 @@
               >
                 Save device
               </button>
-              {#if deviceProfiles.find((profile) => profile.name === selectedDeviceProfile)?.protected !== true}
+              {#if availableDeviceProfiles.find((profile) => profile.name === selectedDeviceProfile)?.protected !== true}
                 <button
                   class="bg-red-500 hover:bg-red-400 text-white text-xs font-medium px-3 py-1 rounded"
                   type="button"
