@@ -6,6 +6,9 @@ build
 .venv
 *.egg-info/
 venv
+uploads/plot_settings.local.json
+uploads/device_settings.local.json
+uploads/plot_settings.json
 
 # Generated frontend bundle
 apps/api/frontend

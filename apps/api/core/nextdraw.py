@@ -17,6 +17,7 @@ try:
 except ImportError:
     svg2paths2 = None
 
+from core.config import OFFLINE_MODE
 from core.state import JOB
 from core.utils import _sanitize_filename
 
@@ -33,6 +34,14 @@ def _format_command(args):
     if isinstance(args, (list, tuple)):
         return " ".join(str(a) for a in args)
     return str(args)
+
+
+def _offline_completed_process(
+    args: Sequence[str],
+    context: str,
+) -> subprocess.CompletedProcess[str]:
+    note = f"[offline:{context}] {_format_command(args)}"
+    return subprocess.CompletedProcess(args=args, returncode=0, stdout=note, stderr="")
 
 
 def _nextdraw_base() -> list[str]:
@@ -59,6 +68,9 @@ def _nextdraw_base() -> list[str]:
 def _run_manual(command: str) -> subprocess.CompletedProcess[str]:
     args = [*_nextdraw_base(), "--mode", "manual", "--manual_cmd", command]
     logger.info("Running nextdraw manual command: %s", _format_command(args))
+    if OFFLINE_MODE:
+        logger.info("Offline mode: skipping manual command execution.")
+        return _offline_completed_process(args, "manual")
     try:
         return subprocess.run(
             args,
@@ -78,6 +90,9 @@ def _run_utility(command: str, extra_args: Optional[Sequence[str]] = None) -> su
     if extra_args:
         args.extend(str(item) for item in extra_args)
     logger.info("Running nextdraw cli command: %s", _format_command(args))
+    if OFFLINE_MODE:
+        logger.info("Offline mode: skipping utility command execution.")
+        return _offline_completed_process(args, "utility")
     try:
         return subprocess.run(
             args,
@@ -185,8 +200,12 @@ def _preview_via_nextdraw(
     svg_path: Path,
     handling: int,
     speed: int,
-    brushless: bool,
+    penlift: Optional[int] = None,
 ) -> tuple[Optional[float], Optional[float]]:
+    if OFFLINE_MODE:
+        logger.info("Offline mode: skipping preview run for %s", svg_path)
+        return None, _estimate_distance_mm(svg_path)
+
     args: list[str] = [*_nextdraw_base(), str(svg_path), "--preview", "--report_time"]
 
     model = (
@@ -198,12 +217,14 @@ def _preview_via_nextdraw(
     if model:
         args.extend(["--model", model])
 
-    args.extend(["--handling", str(handling)])
-    if handling == 4:
-        args.extend(["-s", str(speed)])
+    effective_handling = None if handling == 5 else handling
+    if effective_handling is not None:
+        args.extend(["--handling", str(effective_handling)])
+        if effective_handling == 4:
+            args.extend(["-s", str(speed)])
 
-    if brushless:
-        args.extend(["--penlift", "3"])
+    if penlift in {1, 2, 3}:
+        args.extend(["--penlift", str(penlift)])
 
     logger.debug("Running nextdraw preview: %s", _format_command(args))
     try:
@@ -309,7 +330,8 @@ def _start_plot_from_path(
     p_up: int,
     handling: int = 1,
     speed: int = 70,
-    brushless: bool = False,
+    penlift: Optional[int] = None,
+    no_homing: bool = False,
     original_name: Optional[str] = None,
 ) -> dict[str, Any]:
     if JOB["proc"] and JOB["proc"].poll() is None:
@@ -327,29 +349,30 @@ def _start_plot_from_path(
 
     fixed_path = working_src.with_name(f"{working_src.stem}-fixed.svg")
     page_flag = page.lower() if page and page.lower() in {"a3", "a4", "a5", "a6"} else "a5"
-    try:
-        vp = subprocess.run(
-            [
-                "vpype",
-                "read",
-                str(working_src),
-                "write",
-                "--page-size",
-                page_flag,
-                "--center",
-                str(fixed_path),
-            ],
-            capture_output=True,
-            text=True,
-        )
-        use_path = fixed_path if vp.returncode == 0 else working_src
-        if vp.returncode != 0:
-            logger.warning("vpype exited with %s; falling back to original SVG", vp.returncode)
-            if vp.stderr:
-                logger.debug("vpype stderr: %s", vp.stderr.strip())
-    except FileNotFoundError:
-        logger.warning("vpype command not found; skipping centering step")
-        use_path = working_src
+    use_path = working_src
+    if not OFFLINE_MODE:
+        try:
+            vp = subprocess.run(
+                [
+                    "vpype",
+                    "read",
+                    str(working_src),
+                    "write",
+                    "--page-size",
+                    page_flag,
+                    "--center",
+                    str(fixed_path),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            use_path = fixed_path if vp.returncode == 0 else working_src
+            if vp.returncode != 0:
+                logger.warning("vpype exited with %s; falling back to original SVG", vp.returncode)
+                if vp.stderr:
+                    logger.debug("vpype stderr: %s", vp.stderr.strip())
+        except FileNotFoundError:
+            logger.warning("vpype command not found; skipping centering step")
 
     cmd = [
         *_nextdraw_base(),
@@ -365,15 +388,41 @@ def _start_plot_from_path(
         "--progress",
     ]
 
-    cmd.extend(["--handling", str(handling)])
-    if handling == 4:
-        cmd.extend(["-s", str(speed)])
+    effective_handling = None if handling == 5 else handling
+    if effective_handling is not None:
+        cmd.extend(["--handling", str(effective_handling)])
+        if effective_handling == 4:
+            cmd.extend(["-s", str(speed)])
 
-    if brushless:
-        cmd.extend(["--penlift", "3"])
+    if penlift in {1, 2, 3}:
+        cmd.extend(["--penlift", str(penlift)])
+    if no_homing:
+        cmd.append("--no_homing")
 
     cmd_str = _format_command(cmd)
     logger.info("Launching nextdraw: %s", cmd_str)
+
+    if OFFLINE_MODE:
+        logger.info("Offline mode: command not executed.")
+        JOB["proc"] = None
+        current_name = os.path.basename(use_path)
+        JOB["file"] = current_name
+        JOB["progress"] = 100.0
+        JOB["start_time"] = time.time()
+        JOB["end_time"] = JOB["start_time"]
+        JOB["distance_mm"] = JOB.get("distance_mm") or _estimate_distance_mm(use_path)
+        JOB["elapsed_override"] = 0.0
+        JOB["error"] = None
+        return {
+            "ok": True,
+            "pid": 0,
+            "file": current_name,
+            "cmd": cmd_str,
+            "page": page_flag,
+            "completed": True,
+            "offline": True,
+            "output": "offline mode: command logged but not executed",
+        }
 
     proc = subprocess.Popen(
         cmd,

@@ -35,3 +35,25 @@ class PlotRequest(BaseModel):
     handling: int = 1
     speed: int = 70
     brushless: bool = False
+    penlift: int | None = None
+    no_homing: bool = False
+
+    @property
+    def penlift_value(self) -> int | None:
+        if self.penlift in {1, 2, 3}:
+            return self.penlift
+        if self.brushless:
+            return 3
+        return None
+
+
+class DeviceSettings(BaseModel):
+    model: str = "AxiDraw V3"
+    host: str | None = "localhost"
+    port: int | None = 2222
+    axicli_path: str | None = None
+    home_offset_x: float = 0.0
+    home_offset_y: float = 0.0
+    notes: str | None = None
+    penlift: int = 1
+    no_homing: bool = False

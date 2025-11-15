@@ -1,6 +1,7 @@
 <script lang="ts">
   import Button from '../Button/Button.svelte';
   import { API_BASE_URL } from '../../lib/rpiApi';
+  import { showCommandToast } from '../../lib/toastStore';
 
   const disableMotors = async () => {
     try {
@@ -8,13 +9,21 @@
         method: 'POST',
       });
 
-      if (!response.ok) {
-        console.error('API error:', response.statusText);
-        return;
+      const body = await response.text();
+      let payload: { command?: string } | null = null;
+      try {
+        payload = body ? JSON.parse(body) : null;
+      } catch {
+        payload = null;
       }
 
-      const payload = await response.text();
-      console.log(payload);
+      if (payload?.command) {
+        showCommandToast('Disable motors', payload.command);
+      }
+
+      if (!response.ok) {
+        console.error('API error:', response.statusText);
+      }
     } catch (error) {
       console.error('API error:', error);
     }

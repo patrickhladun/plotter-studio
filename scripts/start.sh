@@ -32,6 +32,24 @@ set -a
 source .env
 set +a
 
+# Default offline behavior depends on script name (dev vs start) unless overridden
+DEV_MODE="${npm_lifecycle_event:-}"
+if [ -z "${PLOTTERSTUDIO_OFFLINE:-}" ]; then
+    if [ "$DEV_MODE" = "dev" ]; then
+        export PLOTTERSTUDIO_OFFLINE=1
+    else
+        export PLOTTERSTUDIO_OFFLINE=0
+    fi
+fi
+
+LOWER_OFFLINE="$(printf '%s' "${PLOTTERSTUDIO_OFFLINE}" | tr '[:upper:]' '[:lower:]')"
+if [[ "$LOWER_OFFLINE" =~ ^(1|true|yes|on)$ ]]; then
+    export PLOTTERSTUDIO_OFFLINE=1
+    echo "🔌 Offline mode enabled (PLOTTERSTUDIO_OFFLINE=1) — nextdraw commands will be skipped."
+else
+    export PLOTTERSTUDIO_OFFLINE=0
+fi
+
 # Create uploads directory if it doesn't exist
 mkdir -p "${PLOTTERSTUDIO_DATA_DIR:-uploads}"
 

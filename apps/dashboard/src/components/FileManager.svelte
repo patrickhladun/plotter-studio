@@ -1,11 +1,47 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
-  import { filesApi, type FileMeta } from '../lib/filesApi';
+  import {
+    filesApi,
+    type DeviceProfile,
+    type DeviceSettings,
+    type FileMeta,
+    type PlotProfile,
+    type PlotSettings,
+  } from '../lib/filesApi';
+  import { PRINT_DEFAULTS, BASE_PLOT_SETTINGS } from '../defaults/printPresets';
+  import { DEVICE_DEFAULTS, BASE_DEVICE_SETTINGS } from '../defaults/devicePresets';
+  import { showCommandToast } from '../lib/toastStore';
   import PenControls from './actions/PenControls.svelte';
   import DisableMotors from './actions/DisableMotors.svelte';
   import GetStatus from './actions/GetStatus.svelte';
 
-  type SectionKey = 'manage' | 'edit' | 'settings' | 'plot' | 'manual';
+  const mergeProfiles = <T extends Record<string, unknown>>(
+    defaults: Record<string, Partial<T>>,
+    overrides: Record<string, Partial<T>>,
+    base: T,
+    fallbackName = 'Default'
+  ): { name: string; settings: T; protected: boolean }[] => {
+    const names = new Set([...Object.keys(defaults), ...Object.keys(overrides)]);
+    if (names.size === 0) {
+      names.add(fallbackName);
+    }
+    return Array.from(names)
+      .map((name) => {
+        const merged = {
+          ...base,
+          ...(defaults[name] ?? {}),
+          ...(overrides[name] ?? {}),
+        } as T;
+        return {
+          name,
+          settings: merged,
+          protected: Boolean(defaults[name]),
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  };
+
+  type SectionKey = 'manage' | 'plot' | 'devices' | 'manual';
 
   const dispatch = createEventDispatcher<{ preview: string }>();
 
@@ -32,18 +68,40 @@
   let previewTimeSeconds: number | null = null;
   let previewDistanceMm: number | null = null;
   let uploadInput: HTMLInputElement | null = null;
+  let plotProfiles: PlotProfile[] = mergeProfiles(PRINT_DEFAULTS, {}, BASE_PLOT_SETTINGS, 'AxiDraw');
+  let selectedProfile: string = 'AxiDraw';
+  let newProfileName = '';
+  let deviceProfiles: DeviceProfile[] = mergeProfiles(
+    DEVICE_DEFAULTS,
+    {},
+    BASE_DEVICE_SETTINGS,
+    'Default Device'
+  );
+  let selectedDeviceProfile: string = 'Default Device';
+  let newDeviceName = '';
 
-  const DEFAULT_PAGE = 'a5';
-  let useConstantSpeed = false;
-  let speedSetting = 70;
-  let brushless = false;
+  let handlingMode = BASE_PLOT_SETTINGS.handling ?? 1;
+  let speedSetting = BASE_PLOT_SETTINGS.speed ?? 70;
+  let speedPenDown = BASE_PLOT_SETTINGS.s_down;
+  let speedPenUp = BASE_PLOT_SETTINGS.s_up;
+  let penPosDown = BASE_PLOT_SETTINGS.p_down;
+  let penPosUp = BASE_PLOT_SETTINGS.p_up;
+  let devicePenliftMode = BASE_DEVICE_SETTINGS.penlift ?? 1;
+  let deviceNoHoming = BASE_DEVICE_SETTINGS.no_homing ?? false;
+  let deviceModel = BASE_DEVICE_SETTINGS.model ?? 'AxiDraw V3';
+  let deviceHost = BASE_DEVICE_SETTINGS.host ?? 'localhost';
+  let devicePort = BASE_DEVICE_SETTINGS.port ?? 2222;
+  let deviceAxicliPath = BASE_DEVICE_SETTINGS.axicli_path ?? '';
+  let deviceHomeOffsetX = BASE_DEVICE_SETTINGS.home_offset_x ?? 0;
+  let deviceHomeOffsetY = BASE_DEVICE_SETTINGS.home_offset_y ?? 0;
+  let deviceNotes = BASE_DEVICE_SETTINGS.notes ?? '';
 
   let openSection: SectionKey = 'manage';
 
   const sections: { key: SectionKey; icon: string; label: string }[] = [
     { key: 'manage', icon: '📁', label: 'Manage Files' },
-    { key: 'settings', icon: '⚙️', label: 'Print Settings' },
-    { key: 'plot', icon: '🖊️', label: 'Plot Controls' },
+    { key: 'plot', icon: '🖊️', label: 'Plot & Settings' },
+    { key: 'devices', icon: '🛠️', label: 'Devices' },
     { key: 'manual', icon: '🤖', label: 'Manual Commands' },
   ];
 
@@ -114,9 +172,239 @@
     }
   };
 
+  const applyProfileSettings = (name: string) => {
+    const profile = plotProfiles.find((item) => item.name === name) ?? plotProfiles[0];
+    const settings = profile?.settings ?? BASE_PLOT_SETTINGS;
+    handlingMode = settings.handling ?? BASE_PLOT_SETTINGS.handling ?? 1;
+    speedSetting = settings.speed ?? BASE_PLOT_SETTINGS.speed ?? 70;
+    speedPenDown = settings.s_down ?? BASE_PLOT_SETTINGS.s_down;
+    speedPenUp = settings.s_up ?? BASE_PLOT_SETTINGS.s_up;
+    penPosDown = settings.p_down ?? BASE_PLOT_SETTINGS.p_down;
+    penPosUp = settings.p_up ?? BASE_PLOT_SETTINGS.p_up;
+    if (profile) {
+      selectedProfile = profile.name;
+    }
+  };
+
+  const loadProfiles = async (initial = false) => {
+    try {
+      const overrides = await filesApi.getPrintOverrides();
+      plotProfiles = mergeProfiles(PRINT_DEFAULTS, overrides, BASE_PLOT_SETTINGS, 'AxiDraw');
+      const hasSelection = plotProfiles.some((profile) => profile.name === selectedProfile);
+      if (!hasSelection) {
+        const fallback =
+          plotProfiles.find((profile) => profile.name === 'AxiDraw')?.name ??
+          plotProfiles[0]?.name ??
+          'AxiDraw';
+        selectedProfile = fallback;
+      }
+      if (initial || !hasSelection) {
+        applyProfileSettings(selectedProfile);
+      }
+    } catch (error) {
+      console.error('Failed to load settings', error);
+      if (plotProfiles.length === 0) {
+        plotProfiles = mergeProfiles(PRINT_DEFAULTS, {}, BASE_PLOT_SETTINGS, 'AxiDraw');
+        applyProfileSettings(plotProfiles[0].name);
+      }
+    }
+  };
+
+  const getPrintProfilePayload = (): PlotSettings => ({
+    ...BASE_PLOT_SETTINGS,
+    handling: handlingMode,
+    speed: speedSetting,
+    s_down: speedPenDown,
+    s_up: speedPenUp,
+    p_down: penPosDown,
+    p_up: penPosUp,
+  });
+
+  const buildPlotPayload = (): PlotSettings & { penlift: number; no_homing: boolean } => {
+    const device = currentDeviceSettings();
+    const penliftValue = Number.isFinite(Number(device.penlift)) ? Number(device.penlift) : 1;
+    return {
+      ...getPrintProfilePayload(),
+      penlift: penliftValue,
+      brushless: penliftValue === 3,
+      no_homing: Boolean(device.no_homing),
+    };
+  };
+
+  const currentDeviceSettings = (): DeviceSettings => ({
+    model: deviceModel || BASE_DEVICE_SETTINGS.model,
+    host: deviceHost || null,
+    port: Number.isFinite(Number(devicePort)) ? Number(devicePort) : null,
+    axicli_path: deviceAxicliPath || null,
+    home_offset_x: Number.isFinite(Number(deviceHomeOffsetX)) ? Number(deviceHomeOffsetX) : 0,
+    home_offset_y: Number.isFinite(Number(deviceHomeOffsetY)) ? Number(deviceHomeOffsetY) : 0,
+    notes: deviceNotes || null,
+    penlift: devicePenliftMode,
+    no_homing: deviceNoHoming,
+  });
+
+  const handleSaveProfile = async () => {
+    const trimmed = newProfileName.trim() || selectedProfile;
+    if (!trimmed) {
+      setStatus('Provide a name for the settings preset.', 'error');
+      return;
+    }
+    try {
+      const saved = await filesApi.savePrintOverride(trimmed, getPrintProfilePayload());
+      selectedProfile = saved.name;
+      newProfileName = '';
+      setStatus(`Saved settings "${saved.name}"`, 'success');
+      await loadProfiles();
+    } catch (error) {
+      console.error('Failed to save settings', error);
+      const message = error instanceof Error ? error.message : 'Failed to save settings';
+      setStatus(message, 'error');
+    }
+  };
+
+  const handleDeleteProfile = async () => {
+    const profile = plotProfiles.find((item) => item.name === selectedProfile);
+    if (!profile || profile.protected) {
+      setStatus('Cannot delete the default settings preset.', 'error');
+      return;
+    }
+    try {
+      await filesApi.deletePrintOverride(profile.name);
+      setStatus(`Deleted settings "${profile.name}"`, 'success');
+      selectedProfile = 'Default';
+      await loadProfiles(true);
+    } catch (error) {
+      console.error('Failed to delete settings', error);
+      const message = error instanceof Error ? error.message : 'Failed to delete settings';
+      setStatus(message, 'error');
+    }
+  };
+
+  const handleProfileChange = (event: Event) => {
+    const target = event.currentTarget as HTMLSelectElement | null;
+    const value = target ? target.value : selectedProfile;
+    applyProfileSettings(value);
+    if (selectedFile) {
+      fetchPreview(selectedFile);
+    }
+  };
+
+  const handleHandlingChange = (event: Event) => {
+    const target = event.currentTarget as HTMLSelectElement | null;
+    const value = target ? Number(target.value) : handlingMode;
+    handlingMode = Number.isNaN(value) ? handlingMode : value;
+    if (selectedFile) {
+      fetchPreview(selectedFile);
+    }
+  };
+
+  const handleDevicePenliftChange = (event: Event) => {
+    const target = event.currentTarget as HTMLSelectElement | null;
+    const value = target ? Number(target.value) : devicePenliftMode;
+    devicePenliftMode = Number.isNaN(value) ? devicePenliftMode : value;
+    if (selectedFile) {
+      fetchPreview(selectedFile);
+    }
+  };
+
+  const handleDevicePresetChange = (event: Event) => {
+    const target = event.currentTarget as HTMLSelectElement | null;
+    const value = target ? target.value : selectedDeviceProfile;
+    applyDeviceProfile(value);
+    if (selectedFile) {
+      fetchPreview(selectedFile);
+    }
+  };
+
+  const applyDeviceProfile = (name: string) => {
+    const profile = deviceProfiles.find((item) => item.name === name) ?? deviceProfiles[0];
+    const settings = profile?.settings ?? BASE_DEVICE_SETTINGS;
+    deviceModel = settings.model ?? BASE_DEVICE_SETTINGS.model ?? 'AxiDraw V3';
+    deviceHost = settings.host ?? BASE_DEVICE_SETTINGS.host ?? 'localhost';
+    devicePort = settings.port ?? BASE_DEVICE_SETTINGS.port ?? 2222;
+    deviceAxicliPath = settings.axicli_path ?? BASE_DEVICE_SETTINGS.axicli_path ?? '';
+    deviceHomeOffsetX = settings.home_offset_x ?? BASE_DEVICE_SETTINGS.home_offset_x ?? 0;
+    deviceHomeOffsetY = settings.home_offset_y ?? BASE_DEVICE_SETTINGS.home_offset_y ?? 0;
+    deviceNotes = settings.notes ?? BASE_DEVICE_SETTINGS.notes ?? '';
+    devicePenliftMode = settings.penlift ?? BASE_DEVICE_SETTINGS.penlift ?? 1;
+    deviceNoHoming =
+      typeof settings.no_homing === 'boolean'
+        ? settings.no_homing
+        : Boolean(BASE_DEVICE_SETTINGS.no_homing);
+    if (profile) {
+      selectedDeviceProfile = profile.name;
+    }
+  };
+
+  const loadDeviceProfiles = async (initial = false) => {
+    try {
+      const overrides = await filesApi.getDeviceOverrides();
+      deviceProfiles = mergeProfiles(DEVICE_DEFAULTS, overrides, BASE_DEVICE_SETTINGS, 'Default Device');
+      const hasSelection = deviceProfiles.some((profile) => profile.name === selectedDeviceProfile);
+      if (!hasSelection) {
+        const fallback =
+          deviceProfiles.find((profile) => profile.name === 'Default Device')?.name ??
+          deviceProfiles[0]?.name ??
+          'Default Device';
+        selectedDeviceProfile = fallback;
+      }
+      if (initial || !hasSelection) {
+        applyDeviceProfile(selectedDeviceProfile);
+      }
+    } catch (error) {
+      console.error('Failed to load device settings', error);
+      if (deviceProfiles.length === 0) {
+        deviceProfiles = mergeProfiles(DEVICE_DEFAULTS, {}, BASE_DEVICE_SETTINGS, 'Default Device');
+        applyDeviceProfile(deviceProfiles[0].name);
+      }
+    }
+  };
+
+  const handleDeviceSave = async () => {
+    const trimmed = newDeviceName.trim() || selectedDeviceProfile;
+    if (!trimmed) {
+      setStatus('Provide a name for the device preset.', 'error');
+      return;
+    }
+    try {
+      const saved = await filesApi.saveDeviceOverride(trimmed, currentDeviceSettings());
+      newDeviceName = '';
+      selectedDeviceProfile = saved.name;
+      await loadDeviceProfiles();
+      setStatus(`Saved device "${saved.name}"`, 'success');
+    } catch (error) {
+      console.error('Failed to save device settings', error);
+      const message = error instanceof Error ? error.message : 'Failed to save device settings';
+      setStatus(message, 'error');
+    }
+  };
+
+  const handleDeviceDelete = async () => {
+    const profile = deviceProfiles.find((item) => item.name === selectedDeviceProfile);
+    if (!profile) {
+      setStatus('Select a device preset to delete.', 'error');
+      return;
+    }
+    if (profile.protected) {
+      setStatus('Repo-managed device presets cannot be deleted.', 'error');
+      return;
+    }
+    try {
+      await filesApi.deleteDeviceOverride(profile.name);
+      setStatus(`Deleted device "${profile.name}"`, 'success');
+      await loadDeviceProfiles(true);
+    } catch (error) {
+      console.error('Failed to delete device settings', error);
+      const message = error instanceof Error ? error.message : 'Failed to delete device settings';
+      setStatus(message, 'error');
+    }
+  };
+
   onMount(() => {
     fetchFiles();
     pollStatus();
+    loadProfiles(true);
+    loadDeviceProfiles(true);
   });
 
   $: selectedMeta = files.find((file) => file.name === selectedFile);
@@ -192,16 +480,7 @@
       plotProgress = 0;
       plotElapsedSeconds = 0;
       plotDistanceMm = previewDistanceMm;
-      const payload = await filesApi.plot(selectedFile, {
-        page: DEFAULT_PAGE,
-        s_down: 30,
-        s_up: 70,
-        p_down: 40,
-        p_up: 70,
-        handling: useConstantSpeed ? 4 : 1,
-        speed: speedSetting,
-        brushless,
-      });
+      const payload = await filesApi.plot(selectedFile, buildPlotPayload());
 
       const pid = typeof payload?.pid === 'number' ? payload.pid : undefined;
       const completed = Boolean(payload?.completed);
@@ -230,9 +509,15 @@
         plotProgress = 100;
         plotElapsedSeconds = 0;
         pollStatus();
+        if (payload && typeof payload.cmd === 'string') {
+          showCommandToast('Plot command (offline)', payload.cmd);
+        }
         return;
       }
 
+      if (payload && typeof payload.cmd === 'string') {
+        showCommandToast(`Plot command${pid ? ` (pid ${pid})` : ''}`, payload.cmd);
+      }
       const pidLabel = pid ? ` (pid ${pid})` : '';
       setStatus(`Plot started for ${selectedFile}${pidLabel}`, 'success');
       pollStatus();
@@ -384,10 +669,11 @@
     previewLoading = true;
     previewError = null;
     try {
+      const payload = buildPlotPayload();
       const data = await filesApi.preview(name, {
-        handling: useConstantSpeed ? 4 : 1,
-        speed: speedSetting,
-        brushless,
+        handling: payload.handling,
+        speed: payload.speed,
+        penlift: payload.penlift,
       });
       const timeValue = data?.estimated_seconds;
       const distanceValue = data?.distance_mm;
@@ -682,58 +968,6 @@
         {/if}
 
         
-      {:else if openSection === 'settings'}
-        {#if selectedFile}
-          <div class="space-y-3">
-            <label class="flex items-center gap-2">
-              <input
-                type="checkbox"
-                bind:checked={useConstantSpeed}
-                on:change={() => fetchPreview(selectedFile)}
-              />
-              <span>Use constant speed</span>
-            </label>
-
-            {#if useConstantSpeed}
-              <label class="flex flex-col gap-1">
-                <span>Speed: {speedSetting}%</span>
-                <input
-                  type="range"
-                  min="1"
-                  max="100"
-                  bind:value={speedSetting}
-                  on:change={() => fetchPreview(selectedFile)}
-                />
-              </label>
-            {/if}
-
-            <label class="flex items-center gap-2">
-              <input
-                type="checkbox"
-                bind:checked={brushless}
-                on:change={() => fetchPreview(selectedFile)}
-              />
-              <span>Brushless head</span>
-            </label>
-
-            {#if previewLoading}
-              <p class="text-neutral-400 text-xs">Estimating plot time…</p>
-            {:else if previewError}
-              <p class="text-red-400 text-xs">{previewError}</p>
-            {:else if previewTimeSeconds !== null || previewDistanceMm !== null}
-              <div class="space-y-1 text-xs text-neutral-300">
-                {#if previewTimeSeconds !== null}
-                  <p>Estimated time: {formatDuration(previewTimeSeconds)}</p>
-                {/if}
-                {#if previewDistanceMm !== null}
-                  <p>Estimated distance: {formatDistance(previewDistanceMm)}</p>
-                {/if}
-              </div>
-            {/if}
-          </div>
-        {:else}
-          <p class="text-neutral-400 text-xs">Select a file to configure print settings.</p>
-        {/if}
       {:else if openSection === 'plot'}
         {#if selectedFile}
           {#if plotProgress !== null}
@@ -780,9 +1014,261 @@
               </button>
             {/if}
           </div>
+          <div class="mt-4 border-t border-neutral-700 pt-4 space-y-3">
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+              Print Settings
+            </h3>
+            <div class="space-y-1">
+              <label class="flex flex-col text-xs text-neutral-300 gap-1">
+                Preset
+                <select
+                  class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+                  bind:value={selectedProfile}
+                  on:change={handleProfileChange}
+                >
+                  {#each plotProfiles as profile}
+                    <option value={profile.name}>{profile.name}</option>
+                  {/each}
+                </select>
+              </label>
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  type="text"
+                  class="flex-1 rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+                  placeholder="Preset name"
+                  bind:value={newProfileName}
+                />
+                <button
+                  class="bg-blue-500 hover:bg-blue-400 text-white text-xs font-medium px-3 py-1 rounded"
+                  type="button"
+                  on:click={handleSaveProfile}
+                >
+                  Save preset
+                </button>
+                {#if plotProfiles.find((profile) => profile.name === selectedProfile)?.protected !== true}
+                  <button
+                    class="bg-red-500 hover:bg-red-400 text-white text-xs font-medium px-3 py-1 rounded"
+                    type="button"
+                    on:click={handleDeleteProfile}
+                  >
+                    Delete preset
+                  </button>
+                {/if}
+              </div>
+            </div>
+
+            <label class="flex flex-col gap-1 text-xs text-neutral-300">
+              <span>Handling mode</span>
+              <select
+                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+                bind:value={handlingMode}
+                on:change={handleHandlingChange}
+              >
+                <option value={1}>1 — Technical drawing (default)</option>
+                <option value={2}>2 — Handwriting</option>
+                <option value={3}>3 — Sketching</option>
+                <option value={4}>4 — Constant speed</option>
+                <option value={5}>5 — Off (no handling flag)</option>
+              </select>
+            </label>
+
+            {#if handlingMode === 4}
+              <label class="flex flex-col gap-1">
+                <span>Speed: {speedSetting}%</span>
+                <input
+                  type="range"
+                  min="1"
+                  max="100"
+                  bind:value={speedSetting}
+                  on:change={() => fetchPreview(selectedFile)}
+                />
+              </label>
+            {/if}
+
+              <label class="flex flex-col gap-1 text-xs text-neutral-300">
+                <span>Pen lift mode</span>
+                <select
+                  class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+                  bind:value={devicePenliftMode}
+                  on:change={handleDevicePenliftChange}
+                >
+                  <option value={1}>1 — Default (AxiDraw)</option>
+                  <option value={2}>2 — NextDraw Future</option>
+                  <option value={3}>3 — Brushless upgrade</option>
+                </select>
+              </label>
+
+            <div class="grid gap-2 sm:grid-cols-2">
+              <label class="flex flex-col text-xs gap-1">
+                <span>Pen-down speed (%)</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  step="1"
+                  class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+                  bind:value={speedPenDown}
+                />
+              </label>
+              <label class="flex flex-col text-xs gap-1">
+                <span>Pen-up speed (%)</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  step="1"
+                  class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+                  bind:value={speedPenUp}
+                />
+              </label>
+              <label class="flex flex-col text-xs gap-1">
+                <span>Pen-down position</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+                  bind:value={penPosDown}
+                />
+              </label>
+              <label class="flex flex-col text-xs gap-1">
+                <span>Pen-up position</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+                  bind:value={penPosUp}
+                />
+              </label>
+            </div>
+
+            {#if previewLoading}
+              <p class="text-neutral-400 text-xs">Estimating plot time…</p>
+            {:else if previewError}
+              <p class="text-red-400 text-xs">{previewError}</p>
+            {:else if previewTimeSeconds !== null || previewDistanceMm !== null}
+              <div class="space-y-1 text-xs text-neutral-300">
+                {#if previewTimeSeconds !== null}
+                  <p>Estimated time: {formatDuration(previewTimeSeconds)}</p>
+                {/if}
+                {#if previewDistanceMm !== null}
+                  <p>Estimated distance: {formatDistance(previewDistanceMm)}</p>
+                {/if}
+              </div>
+            {/if}
+          </div>
         {:else}
-          <p class="text-neutral-400 text-xs">Select a file to view plotting controls.</p>
+          <p class="text-neutral-400 text-xs">Select a file to view plotting controls and settings.</p>
         {/if}
+      {:else if openSection === 'devices'}
+        <div class="space-y-4 text-xs text-neutral-200">
+          <div class="space-y-2">
+            <label class="flex flex-col gap-1">
+              Device preset
+              <select
+                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+                bind:value={selectedDeviceProfile}
+                on:change={handleDevicePresetChange}
+              >
+                {#each deviceProfiles as profile}
+                  <option value={profile.name}>{profile.name}</option>
+                {/each}
+              </select>
+            </label>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input
+                type="text"
+                class="flex-1 rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+                placeholder="Preset name"
+                bind:value={newDeviceName}
+              />
+              <button
+                class="bg-blue-500 hover:bg-blue-400 text-white text-xs font-medium px-3 py-1 rounded"
+                type="button"
+                on:click={handleDeviceSave}
+              >
+                Save device
+              </button>
+              {#if deviceProfiles.find((profile) => profile.name === selectedDeviceProfile)?.protected !== true}
+                <button
+                  class="bg-red-500 hover:bg-red-400 text-white text-xs font-medium px-3 py-1 rounded"
+                  type="button"
+                  on:click={handleDeviceDelete}
+                >
+                  Delete device
+                </button>
+              {/if}
+            </div>
+          </div>
+
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label class="flex flex-col gap-1">
+              <span>Model</span>
+              <input
+                type="text"
+                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+                bind:value={deviceModel}
+              />
+            </label>
+            <label class="flex flex-col gap-1">
+              <span>Host</span>
+              <input
+                type="text"
+                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+                bind:value={deviceHost}
+              />
+            </label>
+            <label class="flex flex-col gap-1">
+              <span>Port</span>
+              <input
+                type="number"
+                min="1"
+                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+                bind:value={devicePort}
+              />
+            </label>
+            <label class="flex flex-col gap-1">
+              <span>NextDraw/AxiCLI path</span>
+              <input
+                type="text"
+                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+                bind:value={deviceAxicliPath}
+              />
+            </label>
+            <label class="flex flex-col gap-1">
+              <span>Home offset X (mm)</span>
+              <input
+                type="number"
+                step="0.1"
+                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+                bind:value={deviceHomeOffsetX}
+              />
+            </label>
+            <label class="flex flex-col gap-1">
+              <span>Home offset Y (mm)</span>
+              <input
+                type="number"
+                step="0.1"
+                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+                bind:value={deviceHomeOffsetY}
+              />
+            </label>
+          </div>
+          <label class="flex flex-col gap-1">
+            <span>Notes</span>
+            <textarea
+              class="min-h-[80px] rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+              bind:value={deviceNotes}
+            />
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" bind:checked={deviceNoHoming} />
+            <span>Skip homing before plots (`--no_homing`)</span>
+          </label>
+        </div>
       {:else}
         <div class="space-y-3">
           <PenControls />

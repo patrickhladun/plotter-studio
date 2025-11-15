@@ -28,6 +28,8 @@ async def plot(
     handling: int = Form(1),
     speed: int = Form(70),
     brushless: bool = Form(False),
+    penlift: int | None = Form(None),
+    no_homing: bool = Form(False),
 ):
     fd, temp_path = tempfile.mkstemp(suffix=".svg")
     temp_file = Path(temp_path)
@@ -51,7 +53,8 @@ async def plot(
             p_up,
             handling,
             speed,
-            brushless,
+            penlift if penlift in {1, 2, 3} else (3 if brushless else None),
+            no_homing,
             original_name=file.filename,
         )
     finally:

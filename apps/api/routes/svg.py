@@ -105,17 +105,20 @@ def preview_file(
     handling: int = Query(1, ge=1),
     speed: int = Query(70, ge=1),
     brushless: bool = False,
+    penlift: int | None = Query(None, ge=1, le=3),
 ):
     safe_name = _sanitize_filename(filename)
     target = DATA_DIR / safe_name
     if not target.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
+    penlift_value = penlift if penlift in {1, 2, 3} else (3 if brushless else None)
+
     est_seconds, est_distance = _preview_via_nextdraw(
         target,
         handling=handling,
         speed=speed,
-        brushless=brushless,
+        penlift=penlift_value,
     )
 
     # Fall back to intrinsic SVG distance if nextdraw preview isn't available.
@@ -152,6 +155,7 @@ def plot_file(filename: str, request: PlotRequest):
         p_up=request.p_up,
         handling=request.handling,
         speed=request.speed,
-        brushless=request.brushless,
+        penlift=request.penlift_value,
+        no_homing=request.no_homing,
         original_name=safe_name,
     )

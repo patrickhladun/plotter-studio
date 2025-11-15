@@ -21,8 +21,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from version import __version__
-from core.config import DATA_DIR, cors_origins
-from routes import svg, plot
+from core.config import DATA_DIR, cors_origins, OFFLINE_MODE
+from routes import svg, plot, settings
 
 # ============================================================
 # Logging Setup
@@ -59,6 +59,7 @@ app.add_middleware(
 
 app.include_router(svg.router)
 app.include_router(plot.router)
+app.include_router(settings.router)
 
 
 # ============================================================
@@ -80,3 +81,5 @@ def version():
 # ============================================================
 logger.info("Plotter Studio API initialized.")
 logger.info(f"Data directory: {DATA_DIR}")
+if OFFLINE_MODE:
+    logger.warning("Offline mode enabled - nextdraw commands will be skipped.")

@@ -2,6 +2,7 @@
   import CanvasWorkspace from './components/Canvas/CanvasWorkspace.svelte';
   import SvgLoader from './components/SvgLoader/SvgLoader.svelte';
   import FileManager from './components/FileManager.svelte';
+  import ToastHost from './components/ToastHost.svelte';
 
   let svgContent: string | null = null;
   let showSidebar = true;
@@ -38,4 +39,5 @@
   >
     <CanvasWorkspace {svgContent} />
   </main>
+  <ToastHost />
 </div>

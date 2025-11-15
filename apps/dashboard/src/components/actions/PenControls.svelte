@@ -1,6 +1,7 @@
 <script lang="ts">
   import Button from '../Button/Button.svelte';
   import { API_BASE_URL } from '../../lib/rpiApi';
+  import { showCommandToast } from '../../lib/toastStore';
 
   type CommandPayload = {
     ok?: boolean;
@@ -42,10 +43,9 @@
       } catch (parseError) {
         payload = null;
       }
-      console.log('pen/toggle response', payload);
       const command = payload && typeof payload.command === 'string' ? payload.command : null;
       if (command) {
-        console.log('nextdraw command', command);
+        showCommandToast('Pen toggle', command);
       }
       if (!response.ok) {
         console.error('API error:', response.statusText);
@@ -94,10 +94,9 @@
       } catch (parseError) {
         payload = null;
       }
-      console.log(`${endpoint} response`, payload);
       const command = payload && typeof payload.command === 'string' ? payload.command : null;
       if (command) {
-        console.log('nextdraw command', command);
+        showCommandToast(enable ? 'Enable motors' : 'Disable motors', command);
       }
       if (!response.ok) {
         console.error('API error:', response.statusText);
@@ -180,8 +179,6 @@
       } catch (parseError) {
         payload = null;
       }
-      console.log('walk response', payload);
-
       const segments: CommandPayload[] = Array.isArray(payload?.segments)
         ? payload?.segments ?? []
         : payload
@@ -190,7 +187,7 @@
       segments.forEach((segment) => {
         const command = segment && typeof segment.command === 'string' ? segment.command : null;
         if (command) {
-          console.log('nextdraw command', command);
+          showCommandToast('Move pen', command);
         }
       });
 
@@ -235,10 +232,9 @@
       } catch (parseError) {
         payload = null;
       }
-      console.log('walk_home response', payload);
       const command = payload && typeof payload.command === 'string' ? payload.command : null;
       if (command) {
-        console.log('nextdraw command', command);
+        showCommandToast('Walk home', command);
       }
       if (!response.ok) {
         console.error('API error:', response.statusText);
