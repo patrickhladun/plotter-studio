@@ -86,9 +86,21 @@ export function buildUtilityCommand(
 
 /**
  * Build a utility command without model flag (e.g., walk_home)
+ * @param command - The utility command to execute
+ * @param extraArgs - Optional additional arguments to add to the command
  */
-export function buildUtilityCommandWithoutModel(command: string): string {
-  return buildNextdrawCommand(null, "-m", "utility", "-M", command);
+export function buildUtilityCommandWithoutModel(
+  command: string,
+  ...extraArgs: string[]
+): string {
+  return buildNextdrawCommand(
+    null,
+    "-m",
+    "utility",
+    "-M",
+    command,
+    ...extraArgs
+  );
 }
 
 /**

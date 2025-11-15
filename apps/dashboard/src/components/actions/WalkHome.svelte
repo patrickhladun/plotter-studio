@@ -9,7 +9,7 @@
   const handleWalkHome = async () => {
     try {
       isMoving = true;
-      const command = buildUtilityCommandWithoutModel('walk_home');
+      const command = buildUtilityCommandWithoutModel('walk_home', '--no_homing');
       const result = await executeCommand(command, 'Walk home');
 
       if (!result.success) {
