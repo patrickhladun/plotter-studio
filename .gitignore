@@ -13,3 +13,5 @@ apps/api/frontend
 temp/.env
 .env
 /.env
+.env.development
+.env.production

@@ -42,7 +42,8 @@ deactivate
 echo "📦 Installing Node dependencies..."
 pnpm install
 
-# Create .env file with defaults
+# Create .env file with defaults (only if missing)
+if [ ! -f ".env" ]; then
 echo "📝 Creating .env file..."
 cat > .env << 'EOF'
 # Plotter Studio Configuration
@@ -51,12 +52,34 @@ PLOTTERSTUDIO_HOST=0.0.0.0
 PLOTTERSTUDIO_PORT=2222
 PLOTTERSTUDIO_DATA_DIR=$PROJECT_ROOT/uploads
 
-# Dashboard Configuration
-DASHBOARD_PORT=2121
 EOF
+else
+    echo "ℹ️  .env already exists, skipping creation."
+fi
 
 # Replace $PROJECT_ROOT with actual path
 sed -i "s|\$PROJECT_ROOT|$PROJECT_ROOT|g" .env
+
+# Create environment-specific override files
+if [ ! -f ".env.development" ]; then
+cat > .env.development << 'EOF'
+# Development overrides
+DASHBOARD_PORT=2121
+PLOTTERSTUDIO_PORT=2222
+EOF
+else
+    echo "ℹ️  .env.development already exists, skipping creation."
+fi
+
+if [ ! -f ".env.production" ]; then
+cat > .env.production << 'EOF'
+# Production overrides
+DASHBOARD_PORT=3000
+PLOTTERSTUDIO_PORT=3333
+EOF
+else
+    echo "ℹ️  .env.production already exists, skipping creation."
+fi
 
 # Create uploads directory
 mkdir -p uploads

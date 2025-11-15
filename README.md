@@ -68,7 +68,9 @@ plotter-studio/
 │           └── lib/
 ├── scripts/              # Setup and startup scripts
 ├── uploads/              # SVG file storage
-└── .env                 # Configuration (auto-generated)
+├── .env                  # Shared configuration (auto-generated)
+├── .env.development      # Dev-only overrides (ports, etc.)
+└── .env.production       # Production overrides
 ```
 
 ## Development
@@ -85,16 +87,20 @@ pnpm build:dashboard  # Build dashboard for production
 
 ### Configuration
 
-Edit `.env` to customize settings:
+Edit `.env` for shared settings (API home, data dir, etc.), and use the override files to set different ports per mode:
 
 ```bash
-# API Configuration
-PLOTTERSTUDIO_HOST=0.0.0.0        # Bind to all interfaces
-PLOTTERSTUDIO_PORT=2222           # API port
-PLOTTERSTUDIO_DATA_DIR=./uploads  # SVG storage location
+# .env (shared defaults)
+PLOTTERSTUDIO_HOST=0.0.0.0
+PLOTTERSTUDIO_DATA_DIR=./uploads
 
-# Dashboard Configuration
-DASHBOARD_PORT=2121               # Dashboard port
+# .env.development (used by pnpm dev)
+DASHBOARD_PORT=2121
+PLOTTERSTUDIO_PORT=2222
+
+# .env.production (used by pnpm start)
+DASHBOARD_PORT=3000
+PLOTTERSTUDIO_PORT=3333
 ```
 
 ## API Endpoints
