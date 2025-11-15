@@ -370,10 +370,17 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
     }
   };
 
-  const handleDevicePenliftChange = (event: Event) => {
+  const handleDevicePenliftChange = async (event: Event) => {
     const target = event.currentTarget as HTMLSelectElement | null;
     const value = target ? Number(target.value) : devicePenliftMode;
     devicePenliftMode = Number.isNaN(value) ? devicePenliftMode : value;
+    
+    // If on Default Device preset, save the change to config file
+    if (selectedDeviceProfile === 'Default Device') {
+      const settings = currentDeviceSettings();
+      await saveDeviceConfig(selectedDeviceProfile, settings);
+    }
+    
     if (selectedFile) {
       fetchPreview(selectedFile);
     }
@@ -388,9 +395,16 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
     }
   };
 
-  const handleNextdrawModelChange = (event: Event) => {
+  const handleNextdrawModelChange = async (event: Event) => {
     const target = event.currentTarget as HTMLSelectElement | null;
     deviceNextdrawModel = target?.value || NEXTDRAW_MODELS[0];
+    
+    // If on Default Device preset, save the change to config file
+    if (selectedDeviceProfile === 'Default Device') {
+      const settings = currentDeviceSettings();
+      await saveDeviceConfig(selectedDeviceProfile, settings);
+    }
+    
     if (selectedFile) {
       fetchPreview(selectedFile);
     }
@@ -425,11 +439,15 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
     try {
       const config: DeviceConfig = {
         selectedDeviceProfile: selectedProfile ?? selectedDeviceProfile,
-        defaultDeviceOverride: defaultOverride,
       };
+      // Only include defaultDeviceOverride if it's explicitly provided (not undefined)
+      if (defaultOverride !== undefined) {
+        config.defaultDeviceOverride = defaultOverride;
+      }
       await filesApi.saveDeviceConfig(config);
     } catch (error) {
       console.error('Failed to save device config:', error);
+      // Don't show error toast for config saves - it's a background operation
     }
   };
 
@@ -535,6 +553,7 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
       pushToast(message, { tone: 'error' });
     }
   };
+
 
   onMount(() => {
     fetchFiles();

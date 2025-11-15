@@ -55,11 +55,16 @@ def get_device_config() -> DeviceConfig:
 @router.post("/device")
 def save_device_config(config: DeviceConfig) -> dict[str, str]:
     """Save device configuration to config file."""
-    current_config = _load_config()
-    current_config["selectedDeviceProfile"] = config.selectedDeviceProfile
-    if config.defaultDeviceOverride is not None:
-        current_config["defaultDeviceOverride"] = config.defaultDeviceOverride
-    _save_config(current_config)
-    logger.info("Device config saved: selectedProfile=%s", config.selectedDeviceProfile)
-    return {"ok": True, "message": "Config saved"}
+    try:
+        current_config = _load_config()
+        if config.selectedDeviceProfile is not None:
+            current_config["selectedDeviceProfile"] = config.selectedDeviceProfile
+        if config.defaultDeviceOverride is not None:
+            current_config["defaultDeviceOverride"] = config.defaultDeviceOverride
+        _save_config(current_config)
+        logger.info("Device config saved: selectedProfile=%s", config.selectedDeviceProfile)
+        return {"ok": True, "message": "Config saved"}
+    except Exception as e:
+        logger.exception("Error saving device config: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to save config: {str(e)}")
 
