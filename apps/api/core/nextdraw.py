@@ -104,32 +104,49 @@ def _run_command(command: str) -> subprocess.CompletedProcess[str]:
     The command string from the dashboard will start with 'nextdraw', but we replace it
     with the configured base command (which may be a custom path).
     """
+    logger.info("Received command string: %s", command)
+    
     # Parse the command string into arguments
     parts = shlex.split(command)
+    logger.info("Parsed command parts: %s", parts)
     
     # Replace 'nextdraw' with the configured base command
     if parts and parts[0] == 'nextdraw':
-        args = [*_nextdraw_base(), *parts[1:]]
+        base_cmd = _nextdraw_base()
+        logger.info("Base command resolved to: %s", base_cmd)
+        args = [*base_cmd, *parts[1:]]
     else:
         # If it doesn't start with 'nextdraw', use as-is (might be a full path)
         args = parts
     
-    logger.info("Running nextdraw command: %s", _format_command(args))
+    logger.info("Final command to execute: %s", _format_command(args))
+    logger.info("Command args list: %s", args)
+    
     if OFFLINE_MODE:
         logger.info("Offline mode: skipping command execution.")
         return _offline_completed_process(args, "command")
     try:
-        return subprocess.run(
+        result = subprocess.run(
             args,
             check=False,
             capture_output=True,
             text=True,
         )
+        logger.info("Command executed. Return code: %d", result.returncode)
+        if result.stdout:
+            logger.info("Command stdout: %s", result.stdout[:500])  # First 500 chars
+        if result.stderr:
+            logger.warning("Command stderr: %s", result.stderr[:500])  # First 500 chars
+        return result
     except FileNotFoundError as exc:
+        logger.error("nextdraw binary not found. Searched for: %s", args[0] if args else "unknown")
         raise HTTPException(
             status_code=500,
             detail="nextdraw binary not found; set PLOTTERSTUDIO_NEXTDRAW (or legacy SYNTHDRAW_AXICLI) to the full path",
         ) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error executing command: %s", exc)
+        raise
 
 
 def _run_manual(command: str, model: Optional[str] = None) -> subprocess.CompletedProcess[str]:

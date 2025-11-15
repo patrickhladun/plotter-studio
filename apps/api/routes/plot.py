@@ -18,8 +18,13 @@ def plot(command: str = Form(...)):
     """Execute a nextdraw command. The dashboard should build the complete command including all flags."""
     if not command or not command.strip():
         raise HTTPException(status_code=400, detail="Command cannot be empty")
-    result = _run_command(command.strip())
-    return _manual_response("command executed", result, error_on_failure=False)
+    command_str = command.strip()
+    logger.info("API received command: %s", command_str)
+    result = _run_command(command_str)
+    response = _manual_response("command executed", result, error_on_failure=False)
+    # Also include the original command string for debugging
+    response["original_command"] = command_str
+    return response
 
 @router.post("/cancel")
 def cancel():
