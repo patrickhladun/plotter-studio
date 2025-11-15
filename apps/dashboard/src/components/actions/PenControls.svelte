@@ -1,6 +1,6 @@
 <script lang="ts">
   import Button from '../Button/Button.svelte';
-  import { buildManualCommand } from '../../lib/nextdrawCommands';
+  import { getModelNumber } from '../../lib/nextdrawCommands';
   import { executeCommand } from '../../lib/commandExecutor';
   import { pushToast } from '../../lib/toastStore';
 
@@ -39,7 +39,13 @@
 
     try {
       isMoving = true;
-      const command = buildManualCommand(model, `walk ${xValue} ${yValue}`);
+      const modelNumber = getModelNumber(model);
+      const parts = ['nextdraw'];
+      if (modelNumber !== null) {
+        parts.push(`-L${modelNumber}`);
+      }
+      parts.push('--mode', 'manual', '--manual_cmd', `walk ${xValue} ${yValue}`);
+      const command = parts.join(' ');
       const result = await executeCommand(command, 'Move pen');
 
       if (!result.success) {

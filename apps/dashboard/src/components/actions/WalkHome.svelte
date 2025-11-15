@@ -1,6 +1,5 @@
 <script lang="ts">
   import Button from '../Button/Button.svelte';
-  import { buildUtilityCommandWithoutModel } from '../../lib/nextdrawCommands';
   import { executeCommand } from '../../lib/commandExecutor';
   import { pushToast } from '../../lib/toastStore';
 
@@ -9,7 +8,7 @@
   const handleWalkHome = async () => {
     try {
       isMoving = true;
-      const command = buildUtilityCommandWithoutModel('walk_home', '--no_homing');
+      const command = 'nextdraw -m utility -M walk_home';
       const result = await executeCommand(command, 'Walk home');
 
       if (!result.success) {

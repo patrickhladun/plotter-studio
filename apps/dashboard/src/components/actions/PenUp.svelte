@@ -1,6 +1,6 @@
 <script lang="ts">
   import Button from '../Button/Button.svelte';
-  import { buildUtilityCommand } from '../../lib/nextdrawCommands';
+  import { getModelNumber } from '../../lib/nextdrawCommands';
   import { executeCommand } from '../../lib/commandExecutor';
   import { pushToast } from '../../lib/toastStore';
 
@@ -11,7 +11,13 @@
   const handlePenUp = async () => {
     try {
       penBusy = true;
-      const command = buildUtilityCommand(model, 'pen_up');
+      const modelNumber = getModelNumber(model);
+      const parts = ['nextdraw'];
+      if (modelNumber !== null) {
+        parts.push(`-L${modelNumber}`);
+      }
+      parts.push('-m', 'utility', '-M', 'pen_up');
+      const command = parts.join(' ');
       const result = await executeCommand(command, 'Pen up');
 
       if (!result.success) {
