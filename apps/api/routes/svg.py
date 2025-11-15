@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,8 @@ from core.schemas import RotateRequest, RenameRequest, PlotRequest
 from core.nextdraw import _preview_via_nextdraw, _estimate_distance_mm, _start_plot_from_path
 from core.config import DATA_DIR
 from rotation import rotate_svg_file
+
+logger = logging.getLogger("plotterstudio.api.files")
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -29,18 +32,36 @@ async def upload_file(file: UploadFile):
     final_name = _unique_filename(safe_name)
     target = DATA_DIR / final_name
 
-    with target.open("wb") as handle:
-        while True:
-            chunk = await file.read(1024 * 1024)
-            if not chunk:
-                break
-            handle.write(chunk)
+    logger.info("Uploading file %s to %s", safe_name, target)
+    try:
+        with target.open("wb") as handle:
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                handle.write(chunk)
+    except PermissionError as exc:
+        logger.exception("Permission error while saving %s", target)
+        raise HTTPException(status_code=500, detail="Server cannot write to uploads directory") from exc
+    except OSError as exc:
+        logger.exception("Failed writing uploaded file %s", target)
+        raise HTTPException(status_code=500, detail="Failed to save uploaded file") from exc
 
-    if target.stat().st_size == 0:
+    try:
+        size = target.stat().st_size
+    except OSError as exc:
+        logger.exception("Unable to stat saved file %s", target)
+        target.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail="Unable to finalize upload") from exc
+
+    if size == 0:
+        logger.warning("Uploaded file %s was empty; removing", target)
         target.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
-    
-    return _file_metadata(target)
+
+    metadata = _file_metadata(target)
+    logger.info("Upload complete for %s (%d bytes)", target.name, size)
+    return metadata
 
 @router.delete("/{filename}", status_code=204)
 def delete_file(filename: str):

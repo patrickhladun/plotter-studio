@@ -505,21 +505,26 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
     }
 
     clearStatus();
+    let saved: FileMeta | null = null;
     try {
       uploadInProgress = true;
-      const saved = await filesApi.upload(file);
-      setStatus(`Uploaded ${saved.name}`, 'success');
-      fetchFiles(saved.name).catch((error) => {
+      saved = await filesApi.upload(file);
+      setStatus(`Uploaded ${saved?.name ?? file.name}`, 'success');
+    } catch (error) {
+      console.error('Upload failed', error);
+      setStatus('Upload failed. Ensure the file is an SVG.', 'error');
+      return;
+    } finally {
+      uploadInProgress = false;
+    }
+    const preferred = saved?.name ?? undefined;
+    setTimeout(() => {
+      fetchFiles(preferred).catch((error) => {
         console.error('Post-upload refresh failed', error);
         const message = error instanceof Error ? error.message : 'Failed to refresh file list';
         setStatus(message, 'error');
       });
-    } catch (error) {
-      console.error('Upload failed', error);
-      setStatus('Upload failed. Ensure the file is an SVG.', 'error');
-    } finally {
-      uploadInProgress = false;
-    }
+    }, 0);
   };
 
   const handleUpload = async (event: Event) => {
