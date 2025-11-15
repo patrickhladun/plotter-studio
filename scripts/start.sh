@@ -48,7 +48,7 @@ EOF
 }
 
 create_env_override "$DEV_ENV_FILE" "Development" 2121 2222
-create_env_override "$PROD_ENV_FILE" "Production" 3000 3333
+create_env_override "$PROD_ENV_FILE" "Production" 3131 3333
 
 # Load environment variables
 set -a
@@ -64,6 +64,14 @@ if [ -f "$ENV_OVERRIDE_FILE" ]; then
     source "$ENV_OVERRIDE_FILE"
 fi
 set +a
+
+if [ "$DEV_MODE" = "dev" ]; then
+    export DASHBOARD_PORT="${DASHBOARD_PORT:-2121}"
+    export PLOTTERSTUDIO_PORT="${PLOTTERSTUDIO_PORT:-2222}"
+else
+    export DASHBOARD_PORT="${DASHBOARD_PORT:-3131}"
+    export PLOTTERSTUDIO_PORT="${PLOTTERSTUDIO_PORT:-3333}"
+fi
 
 # Default offline behavior depends on script name (dev vs start) unless overridden
 if [ -z "${PLOTTERSTUDIO_OFFLINE:-}" ]; then
@@ -94,12 +102,12 @@ export VITE_API_BASE_URL="http://localhost:${PLOTTERSTUDIO_PORT:-2222}"
 echo ""
 echo "🚀 Starting Plotter Studio..."
 echo ""
-echo "  Dashboard: http://localhost:${DASHBOARD_PORT:-2121}"
-echo "  API:       http://localhost:${PLOTTERSTUDIO_PORT:-2222}"
+echo "  Dashboard: http://localhost:${DASHBOARD_PORT}"
+echo "  API:       http://localhost:${PLOTTERSTUDIO_PORT}"
 echo ""
 echo "  Network access:"
-echo "  Dashboard: http://${LOCAL_IP}:${DASHBOARD_PORT:-2121}"
-echo "  API:       http://${LOCAL_IP}:${PLOTTERSTUDIO_PORT:-2222}"
+echo "  Dashboard: http://${LOCAL_IP}:${DASHBOARD_PORT}"
+echo "  API:       http://${LOCAL_IP}:${PLOTTERSTUDIO_PORT}"
 echo ""
 echo "Press Ctrl+C to stop"
 echo ""
@@ -116,7 +124,7 @@ trap cleanup SIGINT SIGTERM EXIT
 
 # Start API in background
 source venv/bin/activate
-uvicorn main:app --app-dir apps/api --host "${PLOTTERSTUDIO_HOST:-0.0.0.0}" --port "${PLOTTERSTUDIO_PORT:-2222}" --reload &
+uvicorn main:app --app-dir apps/api --host "${PLOTTERSTUDIO_HOST:-0.0.0.0}" --port "${PLOTTERSTUDIO_PORT}" --reload &
 API_PID=$!
 
 # Wait a moment for API to start

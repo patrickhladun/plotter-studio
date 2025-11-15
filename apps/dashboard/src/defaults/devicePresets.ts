@@ -2,7 +2,7 @@ import type { DeviceSettings } from '../lib/filesApi';
 
 export const BASE_DEVICE_SETTINGS: DeviceSettings = {
   host: 'localhost',
-  port: 2222,
+  port: 3333,
   axicli_path: '',
   home_offset_x: 0,
   home_offset_y: 0,
