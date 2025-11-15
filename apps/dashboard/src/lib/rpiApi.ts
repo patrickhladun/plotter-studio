@@ -19,8 +19,11 @@ const inferBaseUrl = () => {
   }
 
   if (import.meta.env?.DEV) {
-    // During `pnpm dev` the dashboard runs on its own port, so talk to the API fallback port.
     return FALLBACK_BASE_URL;
+  }
+
+  if (window.location.port === '3131' && window.location.hostname !== 'localhost') {
+    return `${window.location.protocol}//${window.location.hostname}:3333`;
   }
 
   return window.location.origin;
