@@ -18,13 +18,28 @@ export async function executeCommand(
   command: string,
   label: string
 ): Promise<{ success: boolean; payload: CommandPayload | null; error?: string }> {
-  const isDev = import.meta.env?.DEV;
+  // Check if we're in dev mode - use PROD flag (inverted) or MODE check
+  // In Vite: DEV=true in dev, PROD=true in production, MODE='development' or 'production'
+  const isDev = import.meta.env?.DEV === true || import.meta.env?.MODE === 'development';
+  const isProd = import.meta.env?.PROD === true || import.meta.env?.MODE === 'production';
+  
+  // Log environment info for debugging
+  if (typeof window !== 'undefined') {
+    console.log('[commandExecutor] Environment:', {
+      DEV: import.meta.env?.DEV,
+      PROD: import.meta.env?.PROD,
+      MODE: import.meta.env?.MODE,
+      isDev,
+      isProd,
+      API_BASE_URL,
+    });
+  }
 
   // Always show command in toaster
   showCommandToast(label, command);
 
   // In dev mode, don't send to API
-  if (isDev) {
+  if (isDev && !isProd) {
     console.log(`[DEV MODE] Would execute: ${command}`);
     return {
       success: true,
@@ -37,14 +52,22 @@ export async function executeCommand(
   }
 
   // In production, send to API
+  console.log(`[commandExecutor] Sending command to API: ${API_BASE_URL}/plot`);
+  console.log(`[commandExecutor] Command: ${command}`);
+  
   try {
     const formData = new FormData();
     formData.append('command', command);
 
-    const response = await fetch(`${API_BASE_URL}/plot`, {
+    const url = `${API_BASE_URL}/plot`;
+    console.log(`[commandExecutor] Fetching: ${url}`);
+    
+    const response = await fetch(url, {
       method: 'POST',
       body: formData,
     });
+    
+    console.log(`[commandExecutor] Response status: ${response.status} ${response.statusText}`);
 
     const text = await response.text();
     let payload: CommandPayload | null = null;
@@ -83,6 +106,12 @@ export async function executeCommand(
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[commandExecutor] Error executing command:', error);
+    console.error('[commandExecutor] Error details:', {
+      message: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+      url: `${API_BASE_URL}/plot`,
+    });
     return {
       success: false,
       payload: null,

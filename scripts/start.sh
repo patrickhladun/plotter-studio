@@ -218,8 +218,17 @@ for i in {1..10}; do
 done
 
 # Start Dashboard in background
-pnpm --filter plotter-studio-dashboard dev &
-DASHBOARD_PID=$!
+if [ "$DEV_MODE" = "dev" ]; then
+    echo "🔧 Starting Dashboard in dev mode..."
+    pnpm --filter plotter-studio-dashboard dev &
+    DASHBOARD_PID=$!
+else
+    echo "🔧 Building Dashboard for production..."
+    pnpm --filter plotter-studio-dashboard build
+    echo "🔧 Starting Dashboard in production mode..."
+    pnpm --filter plotter-studio-dashboard preview --host 0.0.0.0 --port "${DASHBOARD_PORT}" &
+    DASHBOARD_PID=$!
+fi
 
 # Wait for both processes
 wait $API_PID $DASHBOARD_PID
