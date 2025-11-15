@@ -10,7 +10,8 @@
   import { PRINT_DEFAULTS, BASE_PLOT_SETTINGS } from '../defaults/printPresets';
   import { DEVICE_DEFAULTS, BASE_DEVICE_SETTINGS } from '../defaults/devicePresets';
   import { showCommandToast, pushToast } from '../lib/toastStore';
-  import MovePen from './actions/MovePen.svelte';
+  import WalkX from './actions/WalkX.svelte';
+  import WalkY from './actions/WalkY.svelte';
   import PenUp from './actions/PenUp.svelte';
   import PenDown from './actions/PenDown.svelte';
   import EnableMotors from './actions/EnableMotors.svelte';
@@ -1419,7 +1420,13 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
               <WalkHome />
             </div>
           </div>
-          <MovePen model={deviceNextdrawModel} />
+          <div class="py-4 border-b border-neutral-600 text-xs text-neutral-200">
+            <h2 class="font-semibold mb-2 text-sm text-white">Move Pen</h2>
+            <div class="space-y-2">
+              <WalkX model={deviceNextdrawModel} />
+              <WalkY model={deviceNextdrawModel} />
+            </div>
+          </div>
           <GetStatus />
         </div>
       {/if}

@@ -40,11 +40,14 @@
     try {
       isMoving = true;
       const modelNumber = getModelNumber(model);
+      // Calculate distance from origin: sqrt(x^2 + y^2)
+      const distance = Math.sqrt(xValue * xValue + yValue * yValue);
+      
       const parts = ['nextdraw'];
       if (modelNumber !== null) {
         parts.push(`-L${modelNumber}`);
       }
-      parts.push('--mode', 'manual', '--manual_cmd', `walk ${xValue} ${yValue}`);
+      parts.push('-m', 'utility', '-M', 'walk_mmx', '--dist', distance.toString());
       const command = parts.join(' ');
       const result = await executeCommand(command, 'Move pen');
 
