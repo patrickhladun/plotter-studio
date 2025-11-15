@@ -97,7 +97,11 @@ mkdir -p "${PLOTTERSTUDIO_DATA_DIR:-uploads}"
 LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
 
 echo "🔧 Using ${ENV_LABEL} environment overrides from ${ENV_OVERRIDE_FILE}"
-export VITE_API_BASE_URL="http://localhost:${PLOTTERSTUDIO_PORT:-2222}"
+# In dev mode, don't set VITE_API_BASE_URL so the dashboard uses the Vite proxy
+# In production, set it so the dashboard knows where the API is
+if [ "$DEV_MODE" != "dev" ]; then
+  export VITE_API_BASE_URL="http://localhost:${PLOTTERSTUDIO_PORT:-3333}"
+fi
 
 echo ""
 echo "🚀 Starting Plotter Studio..."
@@ -123,12 +127,95 @@ cleanup() {
 trap cleanup SIGINT SIGTERM EXIT
 
 # Start API in background
+echo "🔧 Starting API server..."
 source venv/bin/activate
-uvicorn main:app --app-dir apps/api --host "${PLOTTERSTUDIO_HOST:-0.0.0.0}" --port "${PLOTTERSTUDIO_PORT}" --reload &
+
+# Check if uvicorn is available
+if ! command -v uvicorn >/dev/null 2>&1; then
+    echo "❌ uvicorn not found. Make sure the virtual environment is activated and dependencies are installed."
+    echo "   Run: source venv/bin/activate && pip install ./apps/api"
+    exit 1
+fi
+
+UVICORN_CMD=(
+    uvicorn
+    main:app
+    --app-dir apps/api
+    --host "${PLOTTERSTUDIO_HOST:-0.0.0.0}"
+    --port "${PLOTTERSTUDIO_PORT}"
+)
+if [ "$DEV_MODE" = "dev" ]; then
+    UVICORN_CMD+=(
+        --reload
+        --reload-dir apps/api
+        --reload-exclude uploads
+        --reload-exclude uploads/*
+    )
+    if [ -d "rotation" ]; then
+        UVICORN_CMD+=(--reload-dir rotation)
+    fi
+fi
+
+# Start uvicorn and capture output
+"${UVICORN_CMD[@]}" > /tmp/plotterstudio-api.log 2>&1 &
 API_PID=$!
 
-# Wait a moment for API to start
-sleep 2
+# Give it a moment to start
+sleep 1
+
+# Check if the process is still running
+if ! kill -0 $API_PID 2>/dev/null; then
+    echo "❌ API server failed to start!"
+    echo "📋 API server logs:"
+    cat /tmp/plotterstudio-api.log
+    exit 1
+fi
+
+echo "✅ API server process started (PID: $API_PID)"
+
+# Wait for API to start and verify it's running
+echo "⏳ Waiting for API server to start..."
+API_READY=false
+for i in {1..10}; do
+  # Check logs first - faster than curl
+  if grep -q "Application startup complete" /tmp/plotterstudio-api.log 2>/dev/null; then
+    echo "✅ API server started (found 'Application startup complete' in logs)"
+    API_READY=true
+    break
+  fi
+  
+  # Also try curl check
+  if curl -s --max-time 1 "http://127.0.0.1:${PLOTTERSTUDIO_PORT}/status" > /dev/null 2>&1; then
+    echo "✅ API server is running on port ${PLOTTERSTUDIO_PORT}"
+    API_READY=true
+    break
+  fi
+  
+  # Check if process is still running
+  if ! kill -0 $API_PID 2>/dev/null; then
+    echo "❌ API server process died!"
+    echo "📋 Last 20 lines of API server logs:"
+    tail -20 /tmp/plotterstudio-api.log 2>/dev/null || echo "No logs available"
+    exit 1
+  fi
+  
+  if [ $i -eq 10 ]; then
+    # Final check - if process is running, continue anyway
+    if kill -0 $API_PID 2>/dev/null; then
+      if grep -q "Uvicorn running" /tmp/plotterstudio-api.log 2>/dev/null; then
+        echo "✅ API server appears to be running (found 'Uvicorn running' in logs)"
+        API_READY=true
+      else
+        echo "⚠️  Warning: API server may not be fully ready, but process is running"
+        echo "📋 Last 10 lines of API server logs:"
+        tail -10 /tmp/plotterstudio-api.log 2>/dev/null || echo "No logs available"
+        echo "Continuing anyway..."
+      fi
+    fi
+  else
+    sleep 0.5
+  fi
+done
 
 # Start Dashboard in background
 pnpm --filter plotter-studio-dashboard dev &

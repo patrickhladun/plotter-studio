@@ -28,39 +28,63 @@ def list_files():
 
 @router.post("", status_code=201)
 async def upload_file(file: UploadFile):
+    import time
+    upload_start = time.time()
     safe_name = _sanitize_filename(file.filename or "uploaded.svg")
     final_name = _unique_filename(safe_name)
     target = DATA_DIR / final_name
 
-    logger.info("Uploading file %s to %s", safe_name, target)
+    logger.info("=" * 60)
+    logger.info("UPLOAD REQUEST STARTED")
+    logger.info("  Original filename: %s", file.filename)
+    logger.info("  Safe name: %s", safe_name)
+    logger.info("  Final name: %s", final_name)
+    logger.info("  Target path: %s", target)
+    logger.info("  Content type: %s", file.content_type)
+    logger.info("  Headers: %s", dict(file.headers) if hasattr(file, 'headers') else 'N/A')
+    
     try:
+        bytes_written = 0
+        chunk_count = 0
         with target.open("wb") as handle:
             while True:
                 chunk = await file.read(1024 * 1024)
                 if not chunk:
                     break
                 handle.write(chunk)
+                bytes_written += len(chunk)
+                chunk_count += 1
+        logger.info("  Wrote %d bytes in %d chunks", bytes_written, chunk_count)
     except PermissionError as exc:
-        logger.exception("Permission error while saving %s", target)
+        logger.exception("PERMISSION ERROR while saving %s", target)
         raise HTTPException(status_code=500, detail="Server cannot write to uploads directory") from exc
     except OSError as exc:
-        logger.exception("Failed writing uploaded file %s", target)
+        logger.exception("OS ERROR writing uploaded file %s", target)
         raise HTTPException(status_code=500, detail="Failed to save uploaded file") from exc
+    except Exception as exc:
+        logger.exception("UNEXPECTED ERROR during file write: %s", type(exc).__name__)
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(exc)}") from exc
 
     try:
         size = target.stat().st_size
+        logger.info("  File size on disk: %d bytes", size)
     except OSError as exc:
-        logger.exception("Unable to stat saved file %s", target)
+        logger.exception("ERROR: Unable to stat saved file %s", target)
         target.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail="Unable to finalize upload") from exc
 
     if size == 0:
-        logger.warning("Uploaded file %s was empty; removing", target)
+        logger.warning("WARNING: Uploaded file %s was empty; removing", target)
         target.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
 
+    upload_duration = time.time() - upload_start
     metadata = _file_metadata(target)
-    logger.info("Upload complete for %s (%d bytes)", target.name, size)
+    logger.info("UPLOAD SUCCESS")
+    logger.info("  File: %s", target.name)
+    logger.info("  Size: %d bytes", size)
+    logger.info("  Duration: %.2f seconds", upload_duration)
+    logger.info("=" * 60)
     return metadata
 
 @router.delete("/{filename}", status_code=204)

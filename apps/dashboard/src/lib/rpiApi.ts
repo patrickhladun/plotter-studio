@@ -19,7 +19,10 @@ const inferBaseUrl = () => {
   }
 
   if (import.meta.env?.DEV) {
-    return FALLBACK_BASE_URL;
+    // In dev mode, always use relative paths to leverage Vite proxy
+    // This avoids CORS issues and works for both localhost and network access
+    // The Vite proxy will forward requests to the API server
+    return '';
   }
 
   if (window.location.port === '3131' && window.location.hostname !== 'localhost') {
@@ -30,3 +33,8 @@ const inferBaseUrl = () => {
 };
 
 export const API_BASE_URL = inferBaseUrl();
+
+// Debug logging in dev mode
+if (typeof window !== 'undefined' && import.meta.env?.DEV) {
+  console.log('[rpiApi] API_BASE_URL:', API_BASE_URL || '(empty - using proxy)');
+}

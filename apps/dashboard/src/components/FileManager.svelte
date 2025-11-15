@@ -506,13 +506,42 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
 
     clearStatus();
     let saved: FileMeta | null = null;
+    const startTime = Date.now();
     try {
       uploadInProgress = true;
+      console.log('[FileManager] Starting upload:', file.name, file.size, 'bytes');
       saved = await filesApi.upload(file);
+      const duration = Date.now() - startTime;
+      console.log('[FileManager] Upload successful:', saved?.name, `(${duration}ms)`);
       setStatus(`Uploaded ${saved?.name ?? file.name}`, 'success');
     } catch (error) {
-      console.error('Upload failed', error);
-      setStatus('Upload failed. Ensure the file is an SVG.', 'error');
+      const duration = Date.now() - startTime;
+      console.error('[FileManager] Upload failed after', duration, 'ms', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorUrl = (error as any)?.url;
+      const errorStatus = (error as any)?.status;
+      const isTimeout = (error as any)?.isTimeout;
+      console.error('[FileManager] Upload error details:', { 
+        errorMessage, 
+        errorUrl, 
+        errorStatus,
+        isTimeout,
+        duration,
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+        } : error,
+      });
+      
+      let displayMessage = errorMessage;
+      if (isTimeout) {
+        displayMessage = 'Upload timeout - API server may not be running or reachable';
+      } else if (errorMessage.includes('Failed to fetch')) {
+        displayMessage = 'Cannot connect to API server - check if it\'s running on port 2222';
+      }
+      
+      setStatus(`Upload failed: ${displayMessage}${errorUrl ? ` (${errorUrl})` : ''}`, 'error');
       return;
     } finally {
       uploadInProgress = false;
