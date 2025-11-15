@@ -18,6 +18,11 @@ const inferBaseUrl = () => {
     return envOverride.trim();
   }
 
+  if (import.meta.env?.DEV) {
+    // During `pnpm dev` the dashboard runs on its own port, so talk to the API fallback port.
+    return FALLBACK_BASE_URL;
+  }
+
   return window.location.origin;
 };
 

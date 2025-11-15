@@ -1,26 +1,12 @@
 import re
-import os
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
-from fastapi import HTTPException
 from typing import Any, Optional
 
-# Global data directory
-DEFAULT_HOME = Path(
-    os.getenv("PLOTTERSTUDIO_HOME")
-    or os.getenv("SYNTHDRAW_HOME")
-    or Path.home() / "plotter-studio"
-)
-DATA_DIR = Path(
-    os.getenv("PLOTTERSTUDIO_DATA_DIR")
-    or os.getenv("SYNTHDRAW_DATA_DIR")
-    or DEFAULT_HOME / "uploads"
-)
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+from fastapi import HTTPException
 
-
-
+from core.config import DATA_DIR
 
 
 def _extract_svg_dimensions(path: Path) -> dict[str, Any]:

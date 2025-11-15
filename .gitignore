@@ -4,6 +4,8 @@ dist
 build
 .vite
 .venv
+*.egg-info/
+venv
 
 # Generated frontend bundle
 apps/api/frontend

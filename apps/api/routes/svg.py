@@ -1,14 +1,14 @@
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, UploadFile, HTTPException, Response
+from fastapi import APIRouter, UploadFile, HTTPException, Response, Query
 from fastapi.responses import FileResponse
 
 from core.utils import _sanitize_filename
-from core.files import _file_metadata, _unique_filename, DATA_DIR
+from core.files import _file_metadata, _unique_filename
 from core.schemas import RotateRequest, RenameRequest, PlotRequest
-from core.nextdraw import _run_manual, _run_utility, _start_plot_from_path
-from core.state import DATA_DIR
+from core.nextdraw import _preview_via_nextdraw, _estimate_distance_mm, _start_plot_from_path
+from core.config import DATA_DIR
 from rotation import rotate_svg_file
 
 router = APIRouter(prefix="/files", tags=["files"])
@@ -21,12 +21,6 @@ def list_files():
     ]
     files.sort(key=lambda path: path.name.lower())
     return [_file_metadata(path) for path in files]
-
-
-def _svg_namespace(tag: str) -> str:
-    if tag.startswith("{"):
-        return tag.split("}", 1)[0] + "}"
-    return ""
 
 
 @router.post("", status_code=201)
@@ -106,8 +100,32 @@ def download_file(filename: str):
     return FileResponse(target, media_type="image/svg+xml", filename=safe_name)
 
 @router.get("/{filename}/preview")
-def preview_file():
-    return 'Preview not implemented yet'
+def preview_file(
+    filename: str,
+    handling: int = Query(1, ge=1),
+    speed: int = Query(70, ge=1),
+    brushless: bool = False,
+):
+    safe_name = _sanitize_filename(filename)
+    target = DATA_DIR / safe_name
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    est_seconds, est_distance = _preview_via_nextdraw(
+        target,
+        handling=handling,
+        speed=speed,
+        brushless=brushless,
+    )
+
+    # Fall back to intrinsic SVG distance if nextdraw preview isn't available.
+    if est_distance is None:
+        est_distance = _estimate_distance_mm(target)
+
+    return {
+        "estimated_seconds": est_seconds,
+        "distance_mm": est_distance,
+    }
 
 @router.get("/{filename}/raw")
 def raw_file(filename: str):

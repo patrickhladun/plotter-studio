@@ -1,5 +1,4 @@
 import logging
-import os
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -22,8 +21,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from version import __version__
-from apps.api.core.state import DATA_DIR
-from apps.api.routes import svg, plot
+from core.config import DATA_DIR, cors_origins
+from routes import svg, plot
 
 # ============================================================
 # Logging Setup
@@ -48,32 +47,11 @@ ET.register_namespace("xlink", "http://www.w3.org/1999/xlink")
 app = FastAPI(title="Plotter Studio", version=__version__)
 
 # ============================================================
-
-DEFAULT_HOME = Path(
-    os.getenv("PLOTTERSTUDIO_HOME")
-    or os.getenv("SYNTHDRAW_HOME")
-    or Path.home() / "plotter-studio"
-)
-
-DATA_DIR = Path(
-    os.getenv("PLOTTERSTUDIO_DATA_DIR")
-    or os.getenv("SYNTHDRAW_DATA_DIR")
-    or DEFAULT_HOME / "uploads"
-)
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-
-# ============================================================
 # CORS + Routes
 # ============================================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:2121",  # Vite dev server
-        "http://localhost:5173",  # Alternative Vite port
-        "http://127.0.0.1:2121",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

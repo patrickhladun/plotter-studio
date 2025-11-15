@@ -1,18 +1,9 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
-  import { API_BASE_URL } from '../lib/rpiApi';
+  import { filesApi, type FileMeta } from '../lib/filesApi';
   import PenControls from './actions/PenControls.svelte';
   import DisableMotors from './actions/DisableMotors.svelte';
   import GetStatus from './actions/GetStatus.svelte';
-
-  type FileMeta = {
-    name: string;
-    size: number;
-    updated_at: string;
-    width?: string | null;
-    height?: string | null;
-    viewBox?: string | null;
-  };
 
   type SectionKey = 'manage' | 'edit' | 'settings' | 'plot' | 'manual';
 
@@ -85,11 +76,7 @@
   const fetchFiles = async (preferred?: string) => {
     isLoading = true;
     try {
-      const response = await fetch(`${API_BASE_URL}/files`);
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-      const data: FileMeta[] = await response.json();
+      const data = await filesApi.list();
       files = Array.isArray(data) ? data : [];
 
       if (files.length === 0) {
@@ -120,7 +107,8 @@
       }
     } catch (error) {
       console.error('Failed to load files', error);
-      setStatus('Failed to load files', 'error');
+      const message = error instanceof Error ? error.message : 'Failed to load files';
+      setStatus(message, 'error');
     } finally {
       isLoading = false;
     }
@@ -140,22 +128,9 @@
     }
 
     clearStatus();
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
       uploadInProgress = true;
-      const response = await fetch(`${API_BASE_URL}/files`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || 'Upload failed');
-      }
-
-      const saved: FileMeta = await response.json();
+      const saved = await filesApi.upload(file);
       setStatus(`Uploaded ${saved.name}`, 'success');
       await fetchFiles(saved.name);
     } catch (error) {
@@ -217,55 +192,18 @@
       plotProgress = 0;
       plotElapsedSeconds = 0;
       plotDistanceMm = previewDistanceMm;
-      const response = await fetch(
-        `${API_BASE_URL}/files/${encodeURIComponent(selectedFile)}/plot`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            page: DEFAULT_PAGE,
-            s_down: 30,
-            s_up: 70,
-            p_down: 40,
-            p_up: 70,
-            handling: useConstantSpeed ? 4 : 1,
-            speed: speedSetting,
-            brushless,
-          }),
-        }
-      );
+      const payload = await filesApi.plot(selectedFile, {
+        page: DEFAULT_PAGE,
+        s_down: 30,
+        s_up: 70,
+        p_down: 40,
+        p_up: 70,
+        handling: useConstantSpeed ? 4 : 1,
+        speed: speedSetting,
+        brushless,
+      });
 
-      const text = await response.text();
-
-      if (!response.ok) {
-        let message = text || 'Plot start failed';
-        try {
-          const data = JSON.parse(text);
-          if (typeof data === 'string') {
-            message = data;
-          } else if (data?.detail) {
-            message = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
-          }
-        } catch (parseError) {
-          // ignore parse errors, fallback to raw text
-        }
-        throw new Error(message);
-      }
-
-      let pid: number | undefined;
-      let payload: Record<string, unknown> | null = null;
-      try {
-        payload = text ? JSON.parse(text) : null;
-      } catch (parseError) {
-        payload = null;
-      }
-
-      if (payload && typeof payload.pid === 'number') {
-        pid = payload.pid;
-      }
-
+      const pid = typeof payload?.pid === 'number' ? payload.pid : undefined;
       const completed = Boolean(payload?.completed);
       const rawOutput = payload?.output;
       const outputSnippet = typeof rawOutput === 'string'
@@ -320,33 +258,7 @@
 
     try {
       rotating = true;
-      const response = await fetch(
-        `${API_BASE_URL}/files/${encodeURIComponent(selectedFile)}/rotate`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ angle }),
-        }
-      );
-
-      if (!response.ok) {
-        const text = await response.text();
-        let message = text || 'Rotation failed';
-        try {
-          const payload = JSON.parse(text);
-          if (typeof payload === 'string') {
-            message = payload;
-          } else if (payload?.detail) {
-            message = typeof payload.detail === 'string' ? payload.detail : JSON.stringify(payload.detail);
-          }
-        } catch (parseError) {
-          // ignore JSON parse errors
-        }
-        throw new Error(message);
-      }
-
+      await filesApi.rotate(selectedFile, angle);
       await fetchFiles(selectedFile);
       setStatus(`Rotated ${selectedFile}`, 'success');
       await fetchPreview(selectedFile);
@@ -375,34 +287,7 @@
 
     try {
       renaming = true;
-      const response = await fetch(
-        `${API_BASE_URL}/files/${encodeURIComponent(selectedFile)}/rename`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ new_name: trimmed }),
-        }
-      );
-
-      if (!response.ok) {
-        const text = await response.text();
-        let message = text || 'Rename failed';
-        try {
-          const payload = JSON.parse(text);
-          if (typeof payload === 'string') {
-            message = payload;
-          } else if (payload?.detail) {
-            message = typeof payload.detail === 'string' ? payload.detail : JSON.stringify(payload.detail);
-          }
-        } catch (parseError) {
-          // ignore JSON parse errors
-        }
-        throw new Error(message);
-      }
-
-      const updated: FileMeta = await response.json();
+      const updated = await filesApi.rename(selectedFile, trimmed);
       selectedFile = updated.name;
       renameValue = updated.name;
       await fetchFiles(updated.name);
@@ -421,13 +306,7 @@
     clearStatus();
     try {
       stopping = true;
-      const response = await fetch(`${API_BASE_URL}/plot/cancel`, {
-        method: 'POST',
-      });
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || 'Failed to stop plot');
-      }
+      await filesApi.cancelPlot();
       setStatus('Plot canceled.', 'success');
       plotRunning = false;
       plotProgress = null;
@@ -443,11 +322,7 @@
 
   const pollStatus = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/plot/status`);
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-      const data = await response.json();
+      const data = await filesApi.status();
       plotRunning = Boolean(data?.running);
       const rawProgress = data?.progress;
       plotProgress = typeof rawProgress === 'number' ? rawProgress : null;
@@ -509,19 +384,11 @@
     previewLoading = true;
     previewError = null;
     try {
-      const params = new URLSearchParams({
-        handling: useConstantSpeed ? '4' : '1',
-        speed: String(speedSetting),
-        brushless: brushless ? 'true' : 'false',
+      const data = await filesApi.preview(name, {
+        handling: useConstantSpeed ? 4 : 1,
+        speed: speedSetting,
+        brushless,
       });
-      const response = await fetch(
-        `${API_BASE_URL}/files/${encodeURIComponent(name)}/preview?${params.toString()}`
-      );
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || 'Preview failed');
-      }
-      const data = await response.json();
       const timeValue = data?.estimated_seconds;
       const distanceValue = data?.distance_mm;
       previewTimeSeconds = typeof timeValue === 'number' ? timeValue : null;
@@ -542,11 +409,7 @@
 
   const previewFile = async (name: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/files/${encodeURIComponent(name)}/raw`);
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-      const svg = await response.text();
+      const svg = await filesApi.raw(name);
       dispatch('preview', svg);
     } catch (error) {
       console.error('Preview failed', error);
@@ -557,13 +420,7 @@
   const handleDelete = async (name: string) => {
     clearStatus();
     try {
-      const response = await fetch(`${API_BASE_URL}/files/${encodeURIComponent(name)}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || 'Delete failed');
-      }
+      await filesApi.remove(name);
       setStatus(`Deleted ${name}`, 'success');
       await fetchFiles();
     } catch (error) {
