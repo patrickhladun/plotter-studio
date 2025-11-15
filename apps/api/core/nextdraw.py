@@ -201,6 +201,7 @@ def _preview_via_nextdraw(
     handling: int,
     speed: int,
     penlift: Optional[int] = None,
+    model: Optional[str] = None,
 ) -> tuple[Optional[float], Optional[float]]:
     if OFFLINE_MODE:
         logger.info("Offline mode: skipping preview run for %s", svg_path)
@@ -208,14 +209,14 @@ def _preview_via_nextdraw(
 
     args: list[str] = [*_nextdraw_base(), str(svg_path), "--preview", "--report_time"]
 
-    model = (
+    resolved_model = model or (
         os.getenv("PLOTTERSTUDIO_MODEL")
         or os.getenv("PLOTTERSTUDIO_MODEL_NAME")
         or os.getenv("SYNTHDRAW_MODEL")
         or os.getenv("SYNTHDRAW_MODEL_NAME")
     )
-    if model:
-        args.extend(["--model", model])
+    if resolved_model:
+        args.extend(["--model", resolved_model])
 
     effective_handling = None if handling == 5 else handling
     if effective_handling is not None:
@@ -332,6 +333,7 @@ def _start_plot_from_path(
     speed: int = 70,
     penlift: Optional[int] = None,
     no_homing: bool = False,
+    model: Optional[str] = None,
     original_name: Optional[str] = None,
 ) -> dict[str, Any]:
     if JOB["proc"] and JOB["proc"].poll() is None:
@@ -387,6 +389,9 @@ def _start_plot_from_path(
         str(p_up),
         "--progress",
     ]
+
+    if model:
+        cmd.extend(["--model", model])
 
     effective_handling = None if handling == 5 else handling
     if effective_handling is not None:

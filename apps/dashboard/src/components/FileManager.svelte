@@ -2,10 +2,8 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import {
     filesApi,
-    type DeviceProfile,
     type DeviceSettings,
     type FileMeta,
-    type PlotProfile,
     type PlotSettings,
   } from '../lib/filesApi';
   import { PRINT_DEFAULTS, BASE_PLOT_SETTINGS } from '../defaults/printPresets';
@@ -14,6 +12,52 @@
   import PenControls from './actions/PenControls.svelte';
   import DisableMotors from './actions/DisableMotors.svelte';
   import GetStatus from './actions/GetStatus.svelte';
+
+  const NEXTDRAW_MODELS = [
+    'AxiDraw V2, V3, or SE/A4',
+    'AxiDraw V3/A3 or SE/A3',
+    'AxiDraw V3 XLX',
+    'AxiDraw MiniKit',
+    'AxiDraw SE/A1',
+    'AxiDraw SE/A2',
+    'AxiDraw V3/B6',
+    'Bantam Tools NextDraw™ 8511 (Default)',
+    'Bantam Tools NextDraw™ 1117',
+    'Bantam Tools NextDraw™ 2234',
+  ];
+
+  const PRINT_STORAGE_KEY = 'plotterstudio.printPresets';
+  const DEVICE_STORAGE_KEY = 'plotterstudio.devicePresets';
+
+  const readLocalPresets = <T>(key: string): Record<string, Partial<T>> => {
+    if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+      return {};
+    }
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) {
+        return {};
+      }
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        return parsed as Record<string, Partial<T>>;
+      }
+    } catch (error) {
+      console.warn(`Failed to parse presets from ${key}`, error);
+    }
+    return {};
+  };
+
+  const writeLocalPresets = <T>(key: string, data: Record<string, Partial<T>>) => {
+    if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+      return;
+    }
+    try {
+      window.localStorage.setItem(key, JSON.stringify(data));
+    } catch (error) {
+      console.warn(`Failed to save presets for ${key}`, error);
+    }
+  };
 
   const mergeProfiles = <T extends Record<string, unknown>>(
     defaults: Record<string, Partial<T>>,
@@ -41,6 +85,8 @@
       .sort((a, b) => a.name.localeCompare(b.name));
   };
 
+  type PlotProfile = { name: string; settings: PlotSettings; protected?: boolean };
+  type DeviceProfile = { name: string; settings: DeviceSettings; protected?: boolean };
   type SectionKey = 'manage' | 'plot' | 'devices' | 'manual';
 
   const dispatch = createEventDispatcher<{ preview: string }>();
@@ -101,15 +147,15 @@
   let speedPenUp = BASE_PLOT_SETTINGS.s_up;
   let penPosDown = BASE_PLOT_SETTINGS.p_down;
   let penPosUp = BASE_PLOT_SETTINGS.p_up;
-  let devicePenliftMode = BASE_DEVICE_SETTINGS.penlift ?? 1;
-  let deviceNoHoming = BASE_DEVICE_SETTINGS.no_homing ?? false;
-  let deviceModel = BASE_DEVICE_SETTINGS.model ?? 'AxiDraw V3';
-  let deviceHost = BASE_DEVICE_SETTINGS.host ?? 'localhost';
-  let devicePort = BASE_DEVICE_SETTINGS.port ?? 2222;
-  let deviceAxicliPath = BASE_DEVICE_SETTINGS.axicli_path ?? '';
-  let deviceHomeOffsetX = BASE_DEVICE_SETTINGS.home_offset_x ?? 0;
-  let deviceHomeOffsetY = BASE_DEVICE_SETTINGS.home_offset_y ?? 0;
-  let deviceNotes = BASE_DEVICE_SETTINGS.notes ?? '';
+let devicePenliftMode = BASE_DEVICE_SETTINGS.penlift ?? 1;
+let deviceNoHoming = BASE_DEVICE_SETTINGS.no_homing ?? false;
+let deviceHost = BASE_DEVICE_SETTINGS.host ?? 'localhost';
+let devicePort = BASE_DEVICE_SETTINGS.port ?? 2222;
+let deviceAxicliPath = BASE_DEVICE_SETTINGS.axicli_path ?? '';
+let deviceHomeOffsetX = BASE_DEVICE_SETTINGS.home_offset_x ?? 0;
+let deviceHomeOffsetY = BASE_DEVICE_SETTINGS.home_offset_y ?? 0;
+let deviceNotes = BASE_DEVICE_SETTINGS.notes ?? '';
+let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS[0];
 
   let openSection: SectionKey = 'manage';
 
@@ -146,6 +192,18 @@
     }
   };
 
+  const requestFullPreview = (name: string | undefined, includeSvg = true) => {
+    if (!name) {
+      dispatch('preview', '');
+      clearPreview();
+      return;
+    }
+    if (includeSvg) {
+      previewFile(name);
+    }
+    fetchPreview(name);
+  };
+
   const fetchFiles = async (preferred?: string) => {
     isLoading = true;
     try {
@@ -164,19 +222,17 @@
       if (preferredMatch) {
         selectedFile = preferredMatch.name;
         renameValue = preferredMatch.name;
-        await previewFile(preferredMatch.name);
-        await fetchPreview(preferredMatch.name);
+        requestFullPreview(preferredMatch.name);
         return;
       }
 
       if (!selectedFile || !files.some((file) => file.name === selectedFile)) {
         selectedFile = files[0].name;
         renameValue = selectedFile;
-        await previewFile(selectedFile);
-        await fetchPreview(selectedFile);
+        requestFullPreview(selectedFile);
       } else {
         renameValue = selectedFile;
-        await fetchPreview(selectedFile);
+        fetchPreview(selectedFile);
       }
     } catch (error) {
       console.error('Failed to load files', error);
@@ -203,7 +259,7 @@
 
   const loadProfiles = async (initial = false) => {
     try {
-      const overrides = await filesApi.getPrintOverrides();
+      const overrides = readLocalPresets<PlotSettings>(PRINT_STORAGE_KEY);
       plotProfiles = mergeProfiles(PRINT_DEFAULTS, overrides, BASE_PLOT_SETTINGS, 'AxiDraw');
       const hasSelection = plotProfiles.some((profile) => profile.name === selectedProfile);
       if (!hasSelection) {
@@ -234,7 +290,7 @@
     p_up: penPosUp,
   });
 
-  const buildPlotPayload = (): PlotSettings & { penlift: number; no_homing: boolean } => {
+  const buildPlotPayload = (): PlotSettings => {
     const device = currentDeviceSettings();
     const penliftValue = Number.isFinite(Number(device.penlift)) ? Number(device.penlift) : 1;
     return {
@@ -242,11 +298,11 @@
       penlift: penliftValue,
       brushless: penliftValue === 3,
       no_homing: Boolean(device.no_homing),
+      model: device.nextdraw_model || NEXTDRAW_MODELS[0],
     };
   };
 
   const currentDeviceSettings = (): DeviceSettings => ({
-    model: deviceModel || BASE_DEVICE_SETTINGS.model,
     host: deviceHost || null,
     port: Number.isFinite(Number(devicePort)) ? Number(devicePort) : null,
     axicli_path: deviceAxicliPath || null,
@@ -255,6 +311,7 @@
     notes: deviceNotes || null,
     penlift: devicePenliftMode,
     no_homing: deviceNoHoming,
+    nextdraw_model: deviceNextdrawModel,
   });
 
   const handleSaveProfile = async () => {
@@ -264,10 +321,13 @@
       return;
     }
     try {
-      const saved = await filesApi.savePrintOverride(trimmed, getPrintProfilePayload());
-      selectedProfile = saved.name;
+      const saved = getPrintProfilePayload();
+      const overrides = readLocalPresets<PlotSettings>(PRINT_STORAGE_KEY);
+      overrides[trimmed] = saved;
+      writeLocalPresets(PRINT_STORAGE_KEY, overrides);
+      selectedProfile = trimmed;
       newProfileName = '';
-      setStatus(`Saved settings "${saved.name}"`, 'success');
+      setStatus(`Saved settings "${trimmed}"`, 'success');
       await loadProfiles();
     } catch (error) {
       console.error('Failed to save settings', error);
@@ -283,9 +343,11 @@
       return;
     }
     try {
-      await filesApi.deletePrintOverride(profile.name);
+      const overrides = readLocalPresets<PlotSettings>(PRINT_STORAGE_KEY);
+      delete overrides[profile.name];
+      writeLocalPresets(PRINT_STORAGE_KEY, overrides);
       setStatus(`Deleted settings "${profile.name}"`, 'success');
-      selectedProfile = 'Default';
+      selectedProfile = 'AxiDraw';
       await loadProfiles(true);
     } catch (error) {
       console.error('Failed to delete settings', error);
@@ -330,10 +392,17 @@
     }
   };
 
+  const handleNextdrawModelChange = (event: Event) => {
+    const target = event.currentTarget as HTMLSelectElement | null;
+    deviceNextdrawModel = target?.value || NEXTDRAW_MODELS[0];
+    if (selectedFile) {
+      fetchPreview(selectedFile);
+    }
+  };
+
   const applyDeviceProfile = (name: string) => {
     const profile = deviceProfiles.find((item) => item.name === name) ?? deviceProfiles[0];
     const settings = profile?.settings ?? BASE_DEVICE_SETTINGS;
-    deviceModel = settings.model ?? BASE_DEVICE_SETTINGS.model ?? 'AxiDraw V3';
     deviceHost = settings.host ?? BASE_DEVICE_SETTINGS.host ?? 'localhost';
     devicePort = settings.port ?? BASE_DEVICE_SETTINGS.port ?? 2222;
     deviceAxicliPath = settings.axicli_path ?? BASE_DEVICE_SETTINGS.axicli_path ?? '';
@@ -345,6 +414,8 @@
       typeof settings.no_homing === 'boolean'
         ? settings.no_homing
         : Boolean(BASE_DEVICE_SETTINGS.no_homing);
+    deviceNextdrawModel =
+      settings.nextdraw_model ?? BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS[0];
     if (profile) {
       selectedDeviceProfile = profile.name;
     }
@@ -352,7 +423,7 @@
 
   const loadDeviceProfiles = async (initial = false) => {
     try {
-      const overrides = await filesApi.getDeviceOverrides();
+      const overrides = readLocalPresets<DeviceSettings>(DEVICE_STORAGE_KEY);
       deviceProfiles = mergeProfiles(DEVICE_DEFAULTS, overrides, BASE_DEVICE_SETTINGS, 'Default Device');
       const hasSelection = deviceProfiles.some((profile) => profile.name === selectedDeviceProfile);
       if (!hasSelection) {
@@ -380,11 +451,13 @@
       return;
     }
     try {
-      const saved = await filesApi.saveDeviceOverride(trimmed, currentDeviceSettings());
+      const overrides = readLocalPresets<DeviceSettings>(DEVICE_STORAGE_KEY);
+      overrides[trimmed] = currentDeviceSettings();
+      writeLocalPresets(DEVICE_STORAGE_KEY, overrides);
       newDeviceName = '';
-      selectedDeviceProfile = saved.name;
+      selectedDeviceProfile = trimmed;
       await loadDeviceProfiles();
-      setStatus(`Saved device "${saved.name}"`, 'success');
+      setStatus(`Saved device "${trimmed}"`, 'success');
     } catch (error) {
       console.error('Failed to save device settings', error);
       const message = error instanceof Error ? error.message : 'Failed to save device settings';
@@ -403,8 +476,11 @@
       return;
     }
     try {
-      await filesApi.deleteDeviceOverride(profile.name);
+      const overrides = readLocalPresets<DeviceSettings>(DEVICE_STORAGE_KEY);
+      delete overrides[profile.name];
+      writeLocalPresets(DEVICE_STORAGE_KEY, overrides);
       setStatus(`Deleted device "${profile.name}"`, 'success');
+      selectedDeviceProfile = 'Default Device';
       await loadDeviceProfiles(true);
     } catch (error) {
       console.error('Failed to delete device settings', error);
@@ -433,7 +509,11 @@
       uploadInProgress = true;
       const saved = await filesApi.upload(file);
       setStatus(`Uploaded ${saved.name}`, 'success');
-      await fetchFiles(saved.name);
+      fetchFiles(saved.name).catch((error) => {
+        console.error('Post-upload refresh failed', error);
+        const message = error instanceof Error ? error.message : 'Failed to refresh file list';
+        setStatus(message, 'error');
+      });
     } catch (error) {
       console.error('Upload failed', error);
       setStatus('Upload failed. Ensure the file is an SVG.', 'error');
@@ -468,14 +548,13 @@
     dragActive = false;
   };
 
-  const handleSelectChange = async (event: Event) => {
+  const handleSelectChange = (event: Event) => {
     const target = event.currentTarget as HTMLSelectElement | null;
     const value = target ? target.value : '';
     if (value) {
       selectedFile = value;
       renameValue = value;
-      await previewFile(value);
-      await fetchPreview(value);
+      requestFullPreview(value);
     }
   };
 
@@ -559,7 +638,6 @@
       await filesApi.rotate(selectedFile, angle);
       await fetchFiles(selectedFile);
       setStatus(`Rotated ${selectedFile}`, 'success');
-      await fetchPreview(selectedFile);
     } catch (error) {
       console.error('Rotation failed', error);
       const message = error instanceof Error ? error.message : 'Rotation failed';
@@ -589,7 +667,6 @@
       selectedFile = updated.name;
       renameValue = updated.name;
       await fetchFiles(updated.name);
-      await fetchPreview(updated.name);
       setStatus(`Renamed to ${updated.name}`, 'success');
     } catch (error) {
       console.error('Rename failed', error);
@@ -673,7 +750,7 @@
     return `${mm.toFixed(1)} mm`;
   };
 
-  const fetchPreview = async (name: string | undefined) => {
+  async function fetchPreview(name: string | undefined) {
     if (!name) {
       clearPreview();
       return;
@@ -687,6 +764,7 @@
         handling: payload.handling,
         speed: payload.speed,
         penlift: payload.penlift,
+        model: payload.model ?? null,
       });
       const timeValue = data?.estimated_seconds;
       const distanceValue = data?.distance_mm;
@@ -704,9 +782,9 @@
     } finally {
       previewLoading = false;
     }
-  };
+  }
 
-  const previewFile = async (name: string) => {
+  async function previewFile(name: string) {
     try {
       const svg = await filesApi.raw(name);
       dispatch('preview', svg);
@@ -714,7 +792,7 @@
       console.error('Preview failed', error);
       setStatus('Preview failed', 'error');
     }
-  };
+  }
 
   const handleDelete = async (name: string) => {
     clearStatus();
@@ -1215,17 +1293,21 @@
                 </button>
               {/if}
             </div>
+            <label class="flex flex-col gap-1">
+              NextDraw model
+              <select
+                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+                bind:value={deviceNextdrawModel}
+                on:change={handleNextdrawModelChange}
+              >
+                {#each NEXTDRAW_MODELS as modelName}
+                  <option value={modelName}>{modelName}</option>
+                {/each}
+              </select>
+            </label>
           </div>
 
           <div class="grid gap-3 sm:grid-cols-2">
-            <label class="flex flex-col gap-1">
-              <span>Model</span>
-              <input
-                type="text"
-                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-                bind:value={deviceModel}
-              />
-            </label>
             <label class="flex flex-col gap-1">
               <span>Host</span>
               <input

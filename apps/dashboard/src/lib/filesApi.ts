@@ -34,10 +34,10 @@ export type PlotSettings = {
   brushless?: boolean;
   penlift?: number;
   no_homing?: boolean;
+  model?: string | null;
 };
 
 export type DeviceSettings = {
-  model: string;
   host?: string | null;
   port?: number | null;
   axicli_path?: string | null;
@@ -46,6 +46,7 @@ export type DeviceSettings = {
   notes?: string | null;
   penlift?: number;
   no_homing?: boolean;
+  nextdraw_model?: string | null;
 };
 
 export type PlotStartResponse = {
@@ -56,18 +57,6 @@ export type PlotStartResponse = {
   page?: string;
   completed?: boolean;
   output?: string;
-};
-
-export type PlotProfile = {
-  name: string;
-  settings: PlotSettings;
-  protected?: boolean;
-};
-
-export type DeviceProfile = {
-  name: string;
-  settings: DeviceSettings;
-  protected?: boolean;
 };
 
 const jsonHeaders = {
@@ -118,15 +107,6 @@ async function request<T>(path: string, init: RequestInit = {}, parser: Parser =
   }
 }
 
-type SettingsResponse<T> = {
-  settings?: Record<string, T>;
-};
-
-const extractSettings = <T>(response: SettingsResponse<T>): Record<string, T> =>
-  response && typeof response.settings === 'object' && response.settings !== null
-    ? response.settings
-    : {};
-
 export const filesApi = {
   list: () => request<FileMeta[]>('/files'),
   upload: (file: File) => {
@@ -149,12 +129,18 @@ export const filesApi = {
       body: JSON.stringify({ angle }),
     }),
   raw: (filename: string) => request<string>(`/files/${encode(filename)}/raw`, {}, 'text'),
-  preview: (filename: string, options: { handling: number; speed: number; penlift: number }) => {
+  preview: (
+    filename: string,
+    options: { handling: number; speed: number; penlift?: number; model?: string | null }
+  ) => {
     const params = new URLSearchParams({
       handling: String(options.handling),
       speed: String(options.speed),
-      penlift: String(options.penlift),
+      penlift: String(options.penlift ?? 1),
     });
+    if (options.model) {
+      params.set('model', options.model);
+    }
     return request<PreviewMetrics>(`/files/${encode(filename)}/preview?${params.toString()}`);
   },
   plot: (filename: string, payload: PlotSettings) =>
@@ -165,24 +151,4 @@ export const filesApi = {
     }),
   cancelPlot: () => request<{ ok?: boolean; message?: string }>('/plot/cancel', { method: 'POST' }),
   status: () => request<PlotStatusResponse>('/plot/status'),
-  getPrintOverrides: () =>
-    request<SettingsResponse<PlotSettings>>('/settings/print').then(extractSettings),
-  savePrintOverride: (name: string, settings: PlotSettings) =>
-    request<{ name: string; settings: PlotSettings }>('/settings/print', {
-      method: 'POST',
-      headers: jsonHeaders,
-      body: JSON.stringify({ name, settings }),
-    }),
-  deletePrintOverride: (name: string) =>
-    request<void>(`/settings/print/${encode(name)}`, { method: 'DELETE' }, 'void'),
-  getDeviceOverrides: () =>
-    request<SettingsResponse<DeviceSettings>>('/settings/devices').then(extractSettings),
-  saveDeviceOverride: (name: string, settings: DeviceSettings) =>
-    request<{ name: string; settings: DeviceSettings }>('/settings/devices', {
-      method: 'POST',
-      headers: jsonHeaders,
-      body: JSON.stringify({ name, settings }),
-    }),
-  deleteDeviceOverride: (name: string) =>
-    request<void>(`/settings/devices/${encode(name)}`, { method: 'DELETE' }, 'void'),
 };

@@ -1,19 +1,19 @@
-import type { DeviceSettings } from "../lib/filesApi";
+import type { DeviceSettings } from '../lib/filesApi';
 
 export const BASE_DEVICE_SETTINGS: DeviceSettings = {
-  model: "AxiDraw V3",
-  host: "localhost",
+  host: 'localhost',
   port: 2222,
-  axicli_path: "",
+  axicli_path: '',
   home_offset_x: 0,
   home_offset_y: 0,
-  notes: "",
+  notes: '',
   penlift: 1,
-  no_homing: true,
+  no_homing: false,
+  nextdraw_model: 'Bantam Tools NextDraw™ 8511 (Default)',
 };
 
 export const DEVICE_DEFAULTS: Record<string, DeviceSettings> = {
-  "AxiDraw V3": {
+  'Default Device': {
     ...BASE_DEVICE_SETTINGS,
   },
 };

@@ -37,6 +37,7 @@ class PlotRequest(BaseModel):
     brushless: bool = False
     penlift: int | None = None
     no_homing: bool = False
+    model: str | None = None
 
     @property
     def penlift_value(self) -> int | None:
@@ -46,14 +47,3 @@ class PlotRequest(BaseModel):
             return 3
         return None
 
-
-class DeviceSettings(BaseModel):
-    model: str = "AxiDraw V3"
-    host: str | None = "localhost"
-    port: int | None = 2222
-    axicli_path: str | None = None
-    home_offset_x: float = 0.0
-    home_offset_y: float = 0.0
-    notes: str | None = None
-    penlift: int = 1
-    no_homing: bool = False
