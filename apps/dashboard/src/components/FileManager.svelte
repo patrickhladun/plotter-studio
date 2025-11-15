@@ -12,6 +12,7 @@
   import { showCommandToast, pushToast } from '../lib/toastStore';
   import WalkX from './actions/WalkX.svelte';
   import WalkY from './actions/WalkY.svelte';
+  import PenPosition from './actions/PenPosition.svelte';
   import PenUp from './actions/PenUp.svelte';
   import PenDown from './actions/PenDown.svelte';
   import EnableMotors from './actions/EnableMotors.svelte';
@@ -1427,6 +1428,7 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
               <WalkY model={deviceNextdrawModel} />
             </div>
           </div>
+          <PenPosition model={deviceNextdrawModel} />
           <GetStatus />
         </div>
       {/if}
