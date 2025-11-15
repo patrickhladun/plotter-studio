@@ -3,36 +3,38 @@
  */
 
 export const NEXTDRAW_MODELS = [
-  'AxiDraw V2, V3, or SE/A4',
-  'AxiDraw V3/A3 or SE/A3',
-  'AxiDraw V3 XLX',
-  'AxiDraw MiniKit',
-  'AxiDraw SE/A1',
-  'AxiDraw SE/A2',
-  'AxiDraw V3/B6',
-  'Bantam Tools NextDraw™ 8511 (Default)',
-  'Bantam Tools NextDraw™ 1117',
-  'Bantam Tools NextDraw™ 2234',
+  "AxiDraw V2, V3, or SE/A4",
+  "AxiDraw V3/A3 or SE/A3",
+  "AxiDraw V3 XLX",
+  "AxiDraw MiniKit",
+  "AxiDraw SE/A1",
+  "AxiDraw SE/A2",
+  "AxiDraw V3/B6",
+  "Bantam Tools NextDraw™ 8511 (Default)",
+  "Bantam Tools NextDraw™ 1117",
+  "Bantam Tools NextDraw™ 2234",
 ] as const;
 
 // Mapping from NextDraw model names to model numbers for -L flag
 const NEXTDRAW_MODEL_MAP: Record<string, number> = {
-  'AxiDraw V2, V3, or SE/A4': 1,
-  'AxiDraw V3/A3 or SE/A3': 2,
-  'AxiDraw V3 XLX': 3,
-  'AxiDraw MiniKit': 4,
-  'AxiDraw SE/A1': 5,
-  'AxiDraw SE/A2': 6,
-  'AxiDraw V3/B6': 7,
-  'Bantam Tools NextDraw™ 8511 (Default)': 8,
-  'Bantam Tools NextDraw™ 1117': 9,
-  'Bantam Tools NextDraw™ 2234': 10,
+  "AxiDraw V2, V3, or SE/A4": 1,
+  "AxiDraw V3/A3 or SE/A3": 2,
+  "AxiDraw V3 XLX": 3,
+  "AxiDraw MiniKit": 4,
+  "AxiDraw SE/A1": 5,
+  "AxiDraw SE/A2": 6,
+  "AxiDraw V3/B6": 7,
+  "Bantam Tools NextDraw™ 8511 (Default)": 8,
+  "Bantam Tools NextDraw™ 1117": 9,
+  "Bantam Tools NextDraw™ 2234": 10,
 };
 
 /**
  * Convert NextDraw model name to model number for -L flag
  */
-export function getModelNumber(modelName: string | null | undefined): number | null {
+export function getModelNumber(
+  modelName: string | null | undefined
+): number | null {
   if (!modelName) {
     return null;
   }
@@ -57,37 +59,42 @@ export function buildNextdrawCommand(
   model: string | null | undefined,
   ...args: string[]
 ): string {
-  const parts: string[] = ['nextdraw'];
-  
+  const parts: string[] = ["nextdraw"];
+
   // Add model flag if model is provided
   const modelNumber = getModelNumber(model);
   if (modelNumber !== null) {
     parts.push(`-L${modelNumber}`);
   }
-  
+
   // Add remaining arguments
   parts.push(...args);
-  
-  return parts.join(' ');
+
+  return parts.join(" ");
 }
 
 /**
- * Build a utility command (e.g., toggle, enable_xy, disable_xy)
+ * Build a utility command (e.g., toggle, enable_xy, disable_xy, walk_home)
  */
 export function buildUtilityCommand(
   model: string | null | undefined,
   command: string
 ): string {
-  return buildNextdrawCommand(model, '-m', 'utility', '-M', command);
+  return buildNextdrawCommand(model, "-m", "utility", "-M", command);
 }
 
 /**
- * Build a manual command (e.g., walk, walk_home, raise_pen)
+ * Build a manual command (e.g., walk with coordinates, raise_pen)
  */
 export function buildManualCommand(
   model: string | null | undefined,
   command: string
 ): string {
-  return buildNextdrawCommand(model, '--mode', 'manual', '--manual_cmd', command);
+  return buildNextdrawCommand(
+    model,
+    "--mode",
+    "manual",
+    "--manual_cmd",
+    command
+  );
 }
-

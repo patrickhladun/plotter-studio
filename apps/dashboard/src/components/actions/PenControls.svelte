@@ -132,7 +132,7 @@
     clearStatus();
     try {
       isMoving = true;
-      const command = buildManualCommand(model, 'walk_home');
+      const command = buildUtilityCommand(model, 'walk_home');
       const result = await executeCommand(command, 'Walk home');
 
       if (!result.success) {
