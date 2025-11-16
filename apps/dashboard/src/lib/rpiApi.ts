@@ -34,15 +34,37 @@ const inferBaseUrl = (): string => {
   const currentPort = window.location.port;
   const currentHostname = window.location.hostname;
   const currentProtocol = window.location.protocol;
+  const fullLocation = window.location.href;
   
-  if (currentPort === '3131') {
-    const apiUrl = `${currentProtocol}//${currentHostname}:3333`;
-    console.log('[rpiApi] Production mode detected:', {
-      port: currentPort,
-      hostname: currentHostname,
-      protocol: currentProtocol,
-      apiUrl,
-    });
+  // Log all location info for debugging
+  console.log('[rpiApi] Window location info:', {
+    href: fullLocation,
+    hostname: currentHostname,
+    port: currentPort,
+    protocol: currentProtocol,
+    host: window.location.host,
+    origin: window.location.origin,
+  });
+  
+  if (currentPort === '3131' || currentPort === '') {
+    // Handle both explicit port and default port cases
+    let apiHostname = currentHostname;
+    
+    // If hostname is localhost or 127.0.0.1, try to detect network IP from the full URL
+    if (currentHostname === 'localhost' || currentHostname === '127.0.0.1') {
+      // Try to extract IP from the full URL if it's there
+      const ipMatch = fullLocation.match(/https?:\/\/(\d+\.\d+\.\d+\.\d+)/);
+      if (ipMatch && ipMatch[1]) {
+        apiHostname = ipMatch[1];
+        console.warn('[rpiApi] Detected localhost but found IP in URL, using:', apiHostname);
+      } else {
+        console.error('[rpiApi] WARNING: Using localhost for API - this will not work from network devices!');
+        console.error('[rpiApi] Full location:', fullLocation);
+      }
+    }
+    
+    const apiUrl = `${currentProtocol}//${apiHostname}:3333`;
+    console.log('[rpiApi] Production mode detected - using API URL:', apiUrl);
     return apiUrl;
   }
 
