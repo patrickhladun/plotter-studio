@@ -45,6 +45,21 @@ export const getFlag = (): string => {
 };
 
 /**
+ * Extract layer number from layer name (e.g., "layer1" -> "1", "layer2" -> "2")
+ * @param layerName - Layer name like "layer1", "layer2", etc.
+ * @returns The numeric part of the layer name, or the original name if no number found
+ */
+const extractLayerNumber = (layerName: string): string => {
+  // Try to extract number from patterns like "layer1", "layer2", "layer10", etc.
+  const match = layerName.match(/layer(\d+)$/i);
+  if (match && match[1]) {
+    return match[1];
+  }
+  // If no match, return original name
+  return layerName;
+};
+
+/**
  * Add layer flags to a command string after the filename
  * @param command - Command string (e.g., "nextdraw -L8 filename.svg --speed_pendown 30")
  * @param layerName - Layer name to add (null/undefined/empty to skip)
@@ -63,6 +78,15 @@ export const addLayerFlags = (
     );
     return command;
   }
+
+  // Extract the layer number from the layer name (e.g., "layer1" -> "1")
+  const layerNumber = extractLayerNumber(layerName.trim());
+  console.log(
+    "[addLayerFlags] Extracted layer number:",
+    layerNumber,
+    "from layer name:",
+    layerName
+  );
 
   // Split command into parts
   const parts = command.split(/\s+/);
@@ -97,8 +121,8 @@ export const addLayerFlags = (
     return command;
   }
 
-  // Insert layer flags after filename: "--mode layers --layer <layer_name>"
-  const layerFlags = ["--mode", "layers", "--layer", layerName.trim()];
+  // Insert layer flags after filename: "--mode layers --layer <layer_number>"
+  const layerFlags = ["--mode", "layers", "--layer", layerNumber];
   parts.splice(filenameIndex + 1, 0, ...layerFlags);
   console.log("[addLayerFlags] Inserted layer flags, new parts:", parts);
 
