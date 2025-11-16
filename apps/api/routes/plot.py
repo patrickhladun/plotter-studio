@@ -34,14 +34,35 @@ def plot(command: str = Form(...)):
                 continue  # Skip 'nextdraw'
             if part.startswith('-'):
                 continue  # Skip flags
-            # This might be a filename - check if it exists in DATA_DIR
-            safe_name = _sanitize_filename(part)
-            full_path = DATA_DIR / safe_name
-            if full_path.exists() and full_path.is_file():
-                # Replace filename with full path
-                parts[i] = str(full_path)
-                logger.info("Resolved filename '%s' to full path: %s", part, full_path)
-                break
+            
+            # Check if it's already an absolute path
+            part_path = Path(part)
+            if part_path.is_absolute():
+                # Already a full path, use it as-is
+                if part_path.exists() and part_path.is_file():
+                    logger.info("Using absolute path: %s", part_path)
+                    break
+                continue
+            
+            # This is a relative filename - check if it exists in DATA_DIR
+            # Extract just the filename in case it has path components
+            filename = part_path.name
+            if not filename.lower().endswith('.svg'):
+                continue  # Not an SVG file, skip
+            
+            # Sanitize and check in DATA_DIR
+            try:
+                safe_name = _sanitize_filename(filename)
+                full_path = DATA_DIR / safe_name
+                if full_path.exists() and full_path.is_file():
+                    # Replace filename with full path
+                    parts[i] = str(full_path)
+                    logger.info("Resolved filename '%s' to full path: %s", part, full_path)
+                    break
+            except HTTPException:
+                # If sanitization fails, skip this part
+                continue
+        
         # Reconstruct command with resolved path
         command_str = ' '.join(shlex.quote(str(p)) for p in parts)
         logger.info("Command with resolved path: %s", command_str)
