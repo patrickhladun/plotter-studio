@@ -36,13 +36,15 @@ export const model = {
  * Uses the current store value by default
  * @returns Model flag string like "-L8" or empty string
  */
-export const getFlag = (): string => {
+function getFlag(): string {
   const num = getModelNumber(get(store));
   if (num === null) {
     return "";
   }
   return `-L${num}`;
-};
+}
+
+export { getFlag };
 
 /**
  * Extract layer number from layer name (e.g., "layer1" -> "1", "layer2" -> "2")
