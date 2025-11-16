@@ -1,24 +1,24 @@
 <script lang="ts">
   import type { DeviceSettings } from '../../lib/filesApi';
   import { createEventDispatcher } from 'svelte';
+  import { NEXTDRAW_MODEL_NUMBERS, NEXTDRAW_MODEL_MAP, DEFAULT_MODEL_NUMBER } from '../../lib/nextdrawCommands';
 
   export let selectedDeviceProfile: string = '';
   export let availableDeviceProfiles: { name: string; settings: DeviceSettings; protected?: boolean }[] = [];
   export let newDeviceName: string = '';
-  export let deviceNextdrawModel: string = '';
+  export let deviceNextdrawModel: number = DEFAULT_MODEL_NUMBER;
   export let deviceAxicliPath: string = '';
   export let deviceHomeOffsetX: number = 0;
   export let deviceHomeOffsetY: number = 0;
   export let deviceNotes: string = '';
   export let devicePenliftMode: number = 1;
   export let deviceNoHoming: boolean = false;
-  export let NEXTDRAW_MODELS: readonly string[] = [];
 
   const dispatch = createEventDispatcher<{
     presetChange: string;
     presetSave: void;
     presetDelete: void;
-    modelChange: string;
+    modelChange: number;
     penliftChange: number;
     settingsChange: void;
   }>();
@@ -39,8 +39,10 @@
 
   const handleModelChange = (event: Event) => {
     const target = event.currentTarget as HTMLSelectElement | null;
-    const value = target?.value || NEXTDRAW_MODELS[0] || '';
-    dispatch('modelChange', value);
+    const value = target ? Number(target.value) : DEFAULT_MODEL_NUMBER;
+    if (!isNaN(value) && value >= 1 && value <= 10) {
+      dispatch('modelChange', value);
+    }
   };
 
   const handlePenliftChange = (event: Event) => {
@@ -99,8 +101,8 @@
         value={deviceNextdrawModel}
         on:change={handleModelChange}
       >
-        {#each NEXTDRAW_MODELS as modelName}
-          <option value={modelName}>{modelName}</option>
+        {#each NEXTDRAW_MODEL_NUMBERS as modelNumber}
+          <option value={modelNumber}>{NEXTDRAW_MODEL_MAP[modelNumber]}</option>
         {/each}
       </select>
     </label>

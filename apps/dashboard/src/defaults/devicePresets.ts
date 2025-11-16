@@ -7,7 +7,7 @@ export const BASE_DEVICE_SETTINGS: DeviceSettings = {
   notes: "",
   penlift: 1,
   no_homing: false,
-  nextdraw_model: "Bantam Tools NextDraw™ 8511 (Default)",
+  nextdraw_model: 8, // Default model number (Bantam Tools NextDraw™ 8511)
 };
 
 export const DEVICE_DEFAULTS: Record<string, DeviceSettings> = {

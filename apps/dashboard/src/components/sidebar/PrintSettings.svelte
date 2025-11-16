@@ -6,6 +6,7 @@
   import { executeCommand } from '../../lib/commandExecutor';
   import { pushToast } from '../../lib/toastStore';
   import { filesApi } from '../../lib/filesApi';
+  import { model } from '../../lib/model';
 
   export let selectedFile: string = '';
   export let selectedProfile: string = '';
@@ -18,7 +19,6 @@
   export let penPosDown: number;
   export let penPosUp: number;
   export let devicePenliftMode: number = 1;
-  export let model: string = 'Bantam Tools NextDraw™ 8511 (Default)';
   export let selectedLayer: string | null = null;
   export let previewLoading: boolean = false;
   export let previewError: string | null = null;
@@ -166,7 +166,7 @@
 
     try {
       isCycling = true;
-      const modelNumber = getModelNumber(model);
+      const modelNumber = getModelNumber($model);
       const parts = ['nextdraw'];
       if (modelNumber !== null) {
         parts.push(`-L${modelNumber}`);

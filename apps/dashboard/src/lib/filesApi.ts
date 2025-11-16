@@ -45,7 +45,7 @@ export type DeviceSettings = {
   notes?: string | null;
   penlift?: number;
   no_homing?: boolean;
-  nextdraw_model?: string | null;
+  nextdraw_model?: number | null; // Changed from string to number
 };
 
 export type DeviceConfig = {

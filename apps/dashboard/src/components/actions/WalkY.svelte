@@ -1,10 +1,8 @@
 <script lang="ts">
   import Button from '../Button/Button.svelte';
-  import { getModelNumber } from '../../lib/nextdrawCommands';
   import { executeCommand } from '../../lib/commandExecutor';
   import { pushToast } from '../../lib/toastStore';
-
-  export let model: string = 'Bantam Tools NextDraw™ 8511 (Default)';
+  import { getFlag } from '../../lib/model';
 
   let yInput: string | number | null = '';
   let isMoving = false;
@@ -31,12 +29,7 @@
 
     try {
       isMoving = true;
-      const modelNumber = getModelNumber(model);
-      const parts = ['nextdraw'];
-      if (modelNumber !== null) {
-        parts.push(`-L${modelNumber}`);
-      }
-      parts.push('-m', 'utility', '-M', 'walk_mmy', '--dist', Math.abs(yValue).toString());
+      const parts = ['nextdraw', getFlag(), '-m', 'utility', '-M', 'walk_mmy', '--dist', Math.abs(yValue).toString()].filter(Boolean);
       const command = parts.join(' ');
       const result = await executeCommand(command, 'Walk Y');
 

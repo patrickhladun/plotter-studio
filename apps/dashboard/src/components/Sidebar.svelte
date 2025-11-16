@@ -9,6 +9,8 @@
   import { PRINT_DEFAULTS, BASE_PLOT_SETTINGS } from '../defaults/printPresets';
   import { DEVICE_DEFAULTS, BASE_DEVICE_SETTINGS } from '../defaults/devicePresets';
   import { showCommandToast, pushToast } from '../lib/toastStore';
+  import { NEXTDRAW_MODELS, NEXTDRAW_MODEL_NUMBERS, NEXTDRAW_MODEL_MAP, DEFAULT_MODEL_NUMBER, getModelNumber, getModelName } from '../lib/nextdrawCommands';
+  import { model } from '../lib/model';
   import WalkX from './actions/WalkX.svelte';
   import WalkY from './actions/WalkY.svelte';
 import PenRaise from './actions/PenRaise.svelte';
@@ -21,19 +23,6 @@ import PenLower from './actions/PenLower.svelte';
   import Plot from './sidebar/Plot.svelte';
   import PrintSettings from './sidebar/PrintSettings.svelte';
   import DevicePresets from './sidebar/DevicePresets.svelte';
-
-  const NEXTDRAW_MODELS = [
-    'AxiDraw V2, V3, or SE/A4',
-    'AxiDraw V3/A3 or SE/A3',
-    'AxiDraw V3 XLX',
-    'AxiDraw MiniKit',
-    'AxiDraw SE/A1',
-    'AxiDraw SE/A2',
-    'AxiDraw V3/B6',
-    'Bantam Tools NextDraw™ 8511 (Default)',
-    'Bantam Tools NextDraw™ 1117',
-    'Bantam Tools NextDraw™ 2234',
-  ];
 
   // Settings are now stored on the server in JSON files, not in browser localStorage
   // Removed localStorage functions - all settings now use API endpoints
@@ -159,9 +148,12 @@ let deviceAxicliPath = BASE_DEVICE_SETTINGS.axicli_path ?? '';
 let deviceHomeOffsetX = BASE_DEVICE_SETTINGS.home_offset_x ?? 0;
 let deviceHomeOffsetY = BASE_DEVICE_SETTINGS.home_offset_y ?? 0;
 let deviceNotes = BASE_DEVICE_SETTINGS.notes ?? '';
-let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS[0];
+let deviceNextdrawModel: number = BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT_MODEL_NUMBER;
 
-
+  // Keep model store in sync with deviceNextdrawModel
+  $: if (deviceNextdrawModel !== undefined) {
+    model.set(deviceNextdrawModel);
+  }
 
   const clearPreview = () => {
     previewLoading = false;
@@ -297,23 +289,17 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
     const device = currentDeviceSettings();
     const penliftValue = Number.isFinite(Number(device.penlift)) ? Number(device.penlift) : 1;
     // Always use deviceNextdrawModel state variable (it's the source of truth)
-    // Validate it's in the list, otherwise use default
-    const modelValue = (deviceNextdrawModel && NEXTDRAW_MODELS.includes(deviceNextdrawModel)) 
+    // Validate it's a valid model number, otherwise use default
+    const modelNumber = (deviceNextdrawModel >= 1 && deviceNextdrawModel <= 10) 
       ? deviceNextdrawModel 
-      : NEXTDRAW_MODELS[0];
-    console.log('[buildPlotPayload] deviceNextdrawModel state:', deviceNextdrawModel);
-    console.log('[buildPlotPayload] Device model from settings:', device.nextdraw_model);
-    console.log('[buildPlotPayload] Final model being used:', modelValue);
-    console.log('[buildPlotPayload] Model is in NEXTDRAW_MODELS:', NEXTDRAW_MODELS.includes(modelValue));
-    if (modelValue !== deviceNextdrawModel) {
-      console.warn('[buildPlotPayload] Model mismatch! State:', deviceNextdrawModel, 'Using:', modelValue);
-    }
+      : DEFAULT_MODEL_NUMBER;
+    const modelName = getModelName(modelNumber);
     return {
       ...getPrintProfilePayload(),
       penlift: penliftValue,
       brushless: penliftValue === 3,
       no_homing: Boolean(device.no_homing),
-      model: modelValue,
+      model: modelName, // PlotSettings still uses string for backward compatibility with API
       layer: selectedLayer,
     };
   };
@@ -428,7 +414,12 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
 
   const handleNextdrawModelChange = async (event: Event) => {
     const target = event.currentTarget as HTMLSelectElement | null;
-    deviceNextdrawModel = target?.value || NEXTDRAW_MODELS[0];
+    const modelNumber = target ? Number(target.value) : DEFAULT_MODEL_NUMBER;
+    if (!isNaN(modelNumber) && modelNumber >= 1 && modelNumber <= 10) {
+      deviceNextdrawModel = modelNumber;
+    } else {
+      deviceNextdrawModel = DEFAULT_MODEL_NUMBER;
+    }
     
     // Save to server when settings change
     try {
@@ -460,11 +451,14 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
       typeof settings.no_homing === 'boolean'
         ? settings.no_homing
         : Boolean(BASE_DEVICE_SETTINGS.no_homing);
-    const savedModel = settings.nextdraw_model ?? BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS[0];
-    // Validate the model is in the valid list, otherwise use default
-    deviceNextdrawModel = NEXTDRAW_MODELS.includes(savedModel) ? savedModel : NEXTDRAW_MODELS[0];
+    const savedModel = settings.nextdraw_model ?? BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT_MODEL_NUMBER;
+    // Convert to number (handles both string and number for backward compatibility)
+    const modelNumber = getModelNumber(savedModel);
+    deviceNextdrawModel = modelNumber ?? DEFAULT_MODEL_NUMBER;
+    // Update model store
+    model.set(deviceNextdrawModel);
     console.log('[applyDeviceProfile] Loaded model from profile:', savedModel);
-    console.log('[applyDeviceProfile] Validated model:', deviceNextdrawModel);
+    console.log('[applyDeviceProfile] Validated model number:', deviceNextdrawModel);
     if (profile) {
       selectedDeviceProfile = profile.name;
       // Save selected profile to server (unless this is during initial load)
@@ -547,13 +541,15 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
         allSettings: settings,
       });
       
-      // Validate model before saving
-      if (settings.nextdraw_model && !NEXTDRAW_MODELS.includes(settings.nextdraw_model)) {
-        console.error('[handleDeviceSave] Invalid model in settings:', settings.nextdraw_model);
-        console.error('[handleDeviceSave] Valid models:', NEXTDRAW_MODELS);
-        pushToast(`Invalid model: ${settings.nextdraw_model}`, { tone: 'error' });
+      // Validate model number before saving
+      const modelNumber = getModelNumber(settings.nextdraw_model);
+      if (modelNumber === null || modelNumber < 1 || modelNumber > 10) {
+        console.error('[handleDeviceSave] Invalid model number in settings:', settings.nextdraw_model);
+        pushToast(`Invalid model number: ${settings.nextdraw_model}`, { tone: 'error' });
         return;
       }
+      // Ensure we save as number
+      settings.nextdraw_model = modelNumber;
       
       // Save to server
       const overrides = await filesApi.getDevicePresets();
@@ -1052,7 +1048,6 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
       bind:penPosUp
       bind:selectedLayer
       bind:devicePenliftMode
-      model={deviceNextdrawModel}
       {previewLoading}
       {previewError}
       {previewTimeSeconds}
@@ -1121,7 +1116,6 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
       bind:deviceNotes
       bind:devicePenliftMode
       bind:deviceNoHoming
-      NEXTDRAW_MODELS={NEXTDRAW_MODELS}
       on:presetChange={async (e) => {
         await applyDeviceProfile(e.detail);
         if (selectedFile) {
@@ -1131,18 +1125,19 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
       on:presetSave={handleDeviceSave}
       on:presetDelete={handleDeviceDelete}
       on:modelChange={async (e) => {
-        const newModel = e.detail;
-        console.log('[modelChange] New model selected:', newModel);
-        console.log('[modelChange] Is valid model?', NEXTDRAW_MODELS.includes(newModel));
+        const newModelNumber = e.detail;
+        console.log('[modelChange] New model number selected:', newModelNumber);
         
-        // Validate the model is in the list
-        if (!NEXTDRAW_MODELS.includes(newModel)) {
-          console.error('[modelChange] Invalid model:', newModel, 'Valid models:', NEXTDRAW_MODELS);
-          pushToast(`Invalid model selected: ${newModel}`, { tone: 'error' });
+        // Validate the model number is in valid range
+        if (typeof newModelNumber !== 'number' || newModelNumber < 1 || newModelNumber > 10) {
+          console.error('[modelChange] Invalid model number:', newModelNumber);
+          pushToast(`Invalid model number: ${newModelNumber}`, { tone: 'error' });
           return;
         }
         
-        deviceNextdrawModel = newModel;
+        deviceNextdrawModel = newModelNumber;
+        // Update model store
+        model.set(deviceNextdrawModel);
         
         // Save to device profile (server)
         try {
@@ -1199,18 +1194,18 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
           <div class="py-4 border-b border-neutral-600 text-xs text-neutral-200">
             <h2 class="font-semibold mb-2 text-sm text-white">Manual Controls</h2>
             <div class="flex flex-wrap gap-2">
-              <PenRaise model={deviceNextdrawModel} />
-              <PenLower model={deviceNextdrawModel} />
-              <EnableMotors model={deviceNextdrawModel} />
-              <DisableMotors model={deviceNextdrawModel} />
+              <PenRaise />
+              <PenLower />
+              <EnableMotors />
+              <DisableMotors />
               <WalkHome />
             </div>
           </div>
           <div class="py-4 border-b border-neutral-600 text-xs text-neutral-200">
             <h2 class="font-semibold mb-2 text-sm text-white">Move Pen</h2>
             <div class="space-y-2">
-              <WalkX model={deviceNextdrawModel} />
-              <WalkY model={deviceNextdrawModel} />
+              <WalkX />
+              <WalkY />
             </div>
           </div>
         </div>

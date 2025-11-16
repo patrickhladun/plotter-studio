@@ -1,10 +1,8 @@
 <script lang="ts">
   import Button from '../Button/Button.svelte';
-  import { getModelNumber } from '../../lib/nextdrawCommands';
   import { executeCommand } from '../../lib/commandExecutor';
   import { pushToast } from '../../lib/toastStore';
-
-  export let model: string = 'Bantam Tools NextDraw™ 8511 (Default)';
+  import { getFlag } from '../../lib/model';
 
   let xInput: string | number | null = '';
   let yInput: string | number | null = '';
@@ -39,12 +37,7 @@
 
     try {
       isMoving = true;
-      const modelNumber = getModelNumber(model);
-      const parts = ['nextdraw'];
-      if (modelNumber !== null) {
-        parts.push(`-L${modelNumber}`);
-      }
-      parts.push('--mode', 'manual', '--manual_cmd', `walk ${xValue} ${yValue}`);
+      const parts = ['nextdraw', getFlag(), '--mode', 'manual', '--manual_cmd', `walk ${xValue} ${yValue}`].filter(Boolean);
       const command = parts.join(' ');
       const result = await executeCommand(command, 'Move pen');
 

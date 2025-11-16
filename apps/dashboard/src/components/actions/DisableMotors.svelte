@@ -3,15 +3,14 @@
   import { buildUtilityCommand } from '../../lib/nextdrawCommands';
   import { executeCommand } from '../../lib/commandExecutor';
   import { pushToast } from '../../lib/toastStore';
-
-  export let model: string = 'Bantam Tools NextDraw™ 8511 (Default)';
+  import { model } from '../../lib/model';
 
   let motorsBusy = false;
 
   const disableMotors = async () => {
     try {
       motorsBusy = true;
-      const command = buildUtilityCommand(model, 'disable_xy');
+      const command = buildUtilityCommand($model, 'disable_xy');
       const result = await executeCommand(command, 'Disable motors');
 
       if (!result.success) {

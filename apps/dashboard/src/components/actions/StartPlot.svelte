@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { filesApi, type PlotSettings } from '../../lib/filesApi';
-  import { showCommandToast, pushToast } from '../../lib/toastStore';
+  import { type PlotSettings } from '../../lib/filesApi';
+  import { pushToast } from '../../lib/toastStore';
+  import { buildPlotCommand } from '../../lib/model';
+  import { executeCommand } from '../../lib/commandExecutor';
 
   export let selectedFile: string = '';
   export let plotSettings: PlotSettings;
@@ -23,46 +25,40 @@
     try {
       if (onPlotStart) onPlotStart();
       
-      console.log('[StartPlot] Plot settings being sent:', plotSettings);
-      console.log('[StartPlot] Model in settings:', plotSettings.model);
-      const payload = await filesApi.plot(selectedFile, plotSettings);
-
-      const pid = typeof payload?.pid === 'number' ? payload.pid : undefined;
-      const completed = Boolean(payload?.completed);
-      const rawOutput = payload?.output;
-      const outputSnippet = typeof rawOutput === 'string'
-        ? (() => {
-            const trimmed = rawOutput.trim();
-            if (!trimmed) {
-              return '';
-            }
-            const lines = trimmed.split('\n').map((line) => line.trim()).filter(Boolean);
-            if (lines.length === 0) {
-              return '';
-            }
-            if (lines.length >= 2 && lines[0].endsWith(':')) {
-              return `${lines[0]} ${lines[1]}`;
-            }
-            return lines[0];
-          })()
-        : '';
-
-      if (completed) {
-        const summary = outputSnippet ? ` (${outputSnippet})` : '';
-        pushToast(`Plot completed immediately for ${selectedFile}${summary}`, { tone: 'success' });
-        if (onPlotComplete) onPlotComplete(payload);
-        if (onStatusPoll) onStatusPoll();
-        if (payload && typeof payload.cmd === 'string') {
-          showCommandToast('Plot command (offline)', payload.cmd);
-        }
+      // Build the complete plot command using getFlag()
+      const command = buildPlotCommand(selectedFile, {
+        s_down: plotSettings.s_down,
+        s_up: plotSettings.s_up,
+        p_down: plotSettings.p_down,
+        p_up: plotSettings.p_up,
+        handling: plotSettings.handling,
+        speed: plotSettings.speed,
+        penlift: plotSettings.penlift,
+        no_homing: plotSettings.no_homing,
+        layer: plotSettings.layer,
+      });
+      
+      console.log('[StartPlot] Plot command:', command);
+      
+      // Execute the command via /plot endpoint (same as other actions)
+      const result = await executeCommand(command, 'Plot');
+      
+      if (!result.success) {
+        const errorMessage = result.error || 'Plot failed';
+        pushToast(errorMessage, { tone: 'error' });
+        if (onPlotError) onPlotError(errorMessage);
         return;
       }
+      
+      const payload = result.payload;
 
-      if (payload && typeof payload.cmd === 'string') {
-        showCommandToast(`Plot command${pid ? ` (pid ${pid})` : ''}`, payload.cmd);
-      }
-      const pidLabel = pid ? ` (pid ${pid})` : '';
-      pushToast(`Plot started for ${selectedFile}${pidLabel}`, { tone: 'success' });
+      // Show success message
+      const stdout = payload && typeof payload.stdout === 'string' ? payload.stdout : null;
+      const inferredMessage = stdout && stdout.trim().length > 0
+        ? stdout.trim().split('\n')[0]
+        : `Plot started for ${selectedFile}`;
+      pushToast(inferredMessage, { tone: 'success' });
+      
       if (onPlotComplete) onPlotComplete(payload);
       if (onStatusPoll) onStatusPoll();
     } catch (error) {

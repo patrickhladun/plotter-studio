@@ -1,22 +1,15 @@
 <script lang="ts">
   import Button from '../Button/Button.svelte';
-  import { getModelNumber } from '../../lib/nextdrawCommands';
   import { executeCommand } from '../../lib/commandExecutor';
   import { pushToast } from '../../lib/toastStore';
-
-  export let model: string = 'Bantam Tools NextDraw™ 8511 (Default)';
+  import { getFlag } from '../../lib/model';
 
   let penBusy = false;
 
   const handlePenRaise = async () => {
     try {
       penBusy = true;
-      const modelNumber = getModelNumber(model);
-      const parts = ['nextdraw'];
-      if (modelNumber !== null) {
-        parts.push(`-L${modelNumber}`);
-      }
-      parts.push('-m', 'utility', '-M', 'raise_up');
+      const parts = ['nextdraw', getFlag(), '-m', 'utility', '-M', 'raise_up'].filter(Boolean);
       const command = parts.join(' ');
       const result = await executeCommand(command, 'Pen raise');
 

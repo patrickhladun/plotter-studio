@@ -1,10 +1,8 @@
 <script lang="ts">
   import Button from '../Button/Button.svelte';
-  import { getModelNumber } from '../../lib/nextdrawCommands';
   import { executeCommand } from '../../lib/commandExecutor';
   import { pushToast } from '../../lib/toastStore';
-
-  export let model: string = 'Bantam Tools NextDraw™ 8511 (Default)';
+  import { getFlag } from '../../lib/model';
 
   let penDownPos: string | number | null = 20;
   let penUpPos: string | number | null = 80;
@@ -44,12 +42,7 @@
 
     try {
       isCycling = true;
-      const modelNumber = getModelNumber(model);
-      const parts = ['nextdraw'];
-      if (modelNumber !== null) {
-        parts.push(`-L${modelNumber}`);
-      }
-      parts.push('--mode', 'cycle', '--pen_pos_down', downValue.toString(), '--pen_pos_up', upValue.toString());
+      const parts = ['nextdraw', getFlag(), '--mode', 'cycle', '--pen_pos_down', downValue.toString(), '--pen_pos_up', upValue.toString()].filter(Boolean);
       const command = parts.join(' ');
       const result = await executeCommand(command, 'Cycle pen position');
 
