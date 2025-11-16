@@ -97,8 +97,8 @@ export const addLayerFlags = (
     return command;
   }
 
-  // Insert layer flags after filename: "--mode layers <layer_name>"
-  const layerFlags = ["--mode", "layers", layerName.trim()];
+  // Insert layer flags after filename: "--mode layers --layer <layer_name>"
+  const layerFlags = ["--mode", "layers", "--layer", layerName.trim()];
   parts.splice(filenameIndex + 1, 0, ...layerFlags);
   console.log("[addLayerFlags] Inserted layer flags, new parts:", parts);
 
