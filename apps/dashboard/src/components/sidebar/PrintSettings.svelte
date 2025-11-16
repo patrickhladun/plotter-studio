@@ -5,6 +5,7 @@
   import { getModelNumber } from '../../lib/nextdrawCommands';
   import { executeCommand } from '../../lib/commandExecutor';
   import { pushToast } from '../../lib/toastStore';
+  import { filesApi } from '../../lib/filesApi';
 
   export let selectedFile: string = '';
   export let selectedProfile: string = '';
@@ -18,12 +19,15 @@
   export let penPosUp: number;
   export let devicePenliftMode: number = 1;
   export let model: string = 'Bantam Tools NextDraw™ 8511 (Default)';
+  export let selectedLayer: string | null = null;
   export let previewLoading: boolean = false;
   export let previewError: string | null = null;
   export let previewTimeSeconds: number | null = null;
   export let previewDistanceMm: number | null = null;
 
   let isCycling = false;
+  let availableLayers: string[] = [];
+  let layersLoading = false;
 
   const dispatch = createEventDispatcher<{
     profileChange: string;
@@ -32,8 +36,42 @@
     handlingChange: number;
     speedChange: number;
     penliftChange: number;
+    layerChange: string | null;
     settingsChange: void;
   }>();
+
+  let lastFetchedFile: string | null = null;
+
+  $: if (selectedFile && selectedFile !== lastFetchedFile) {
+    lastFetchedFile = selectedFile;
+    fetchLayers();
+  } else if (!selectedFile) {
+    availableLayers = [];
+    selectedLayer = null;
+    lastFetchedFile = null;
+  }
+
+  async function fetchLayers() {
+    if (!selectedFile) {
+      availableLayers = [];
+      return;
+    }
+    try {
+      layersLoading = true;
+      const result = await filesApi.getLayers(selectedFile);
+      availableLayers = result?.layers || [];
+      // If current selection is not in available layers, reset to null
+      if (selectedLayer && !availableLayers.includes(selectedLayer)) {
+        selectedLayer = null;
+        dispatch('layerChange', null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch layers:', error);
+      availableLayers = [];
+    } finally {
+      layersLoading = false;
+    }
+  }
 
   const formatDuration = (value: number) => {
     if (!Number.isFinite(value) || value < 0) {
@@ -96,6 +134,14 @@
   };
 
   const handleSettingsChange = () => {
+    dispatch('settingsChange');
+  };
+
+  const handleLayerChange = (event: Event) => {
+    const target = event.currentTarget as HTMLSelectElement | null;
+    const value = target?.value || null;
+    selectedLayer = value === '' ? null : value;
+    dispatch('layerChange', selectedLayer);
     dispatch('settingsChange');
   };
 
@@ -228,6 +274,23 @@
         <option value={3}>3 — Brushless upgrade</option>
       </select>
     </label>
+
+    {#if availableLayers.length > 0}
+      <label class="flex flex-col gap-1 text-xs text-neutral-300">
+        <span>Layer</span>
+        <select
+          class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
+          value={selectedLayer || ''}
+          on:change={handleLayerChange}
+          disabled={layersLoading}
+        >
+          <option value="">All layers (default)</option>
+          {#each availableLayers as layer}
+            <option value={layer}>{layer}</option>
+          {/each}
+        </select>
+      </label>
+    {/if}
 
     <div class="grid gap-2 sm:grid-cols-2">
       <label class="flex flex-col text-xs gap-1">

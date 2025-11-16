@@ -1,4 +1,5 @@
 import logging
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
@@ -184,6 +185,45 @@ def raw_file(filename: str):
         raise HTTPException(status_code=404, detail="File not found")
     return Response(target.read_text(), media_type="image/svg+xml")
 
+@router.get("/{filename}/layers")
+def get_layers(filename: str):
+    """Extract layer IDs from an SVG file. Layers are identified by elements with id attributes."""
+    safe_name = _sanitize_filename(filename)
+    target = DATA_DIR / safe_name
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    try:
+        tree = ET.parse(target)
+        root = tree.getroot()
+        
+        # Find all elements with id attributes
+        layers = []
+        for elem in root.iter():
+            layer_id = elem.get('id')
+            if layer_id:
+                # Filter out common SVG element IDs that aren't typically layers
+                # (like gradients, patterns, etc.)
+                tag = elem.tag.split('}')[-1] if '}' in elem.tag else elem.tag
+                if tag not in ['linearGradient', 'radialGradient', 'pattern', 'clipPath', 'mask', 'defs']:
+                    layers.append(layer_id)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_layers = []
+        for layer_id in layers:
+            if layer_id not in seen:
+                seen.add(layer_id)
+                unique_layers.append(layer_id)
+        
+        return {"layers": unique_layers}
+    except ET.ParseError as exc:
+        logger.warning("Failed to parse SVG for layers: %s", exc)
+        return {"layers": []}
+    except Exception as exc:
+        logger.exception("Error extracting layers from SVG: %s", exc)
+        return {"layers": []}
+
 @router.post("/{filename}/plot")
 def plot_file(filename: str, request: PlotRequest):
     """Start plotting an uploaded SVG file."""
@@ -204,5 +244,6 @@ def plot_file(filename: str, request: PlotRequest):
         penlift=request.penlift_value,
         no_homing=request.no_homing,
         model=request.model,
+        layer=request.layer,
         original_name=safe_name,
     )

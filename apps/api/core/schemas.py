@@ -38,6 +38,7 @@ class PlotRequest(BaseModel):
     penlift: int | None = None
     no_homing: bool = False
     model: str | None = None
+    layer: str | None = None
 
     @property
     def penlift_value(self) -> int | None:

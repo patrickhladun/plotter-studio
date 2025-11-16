@@ -444,6 +444,7 @@ def _start_plot_from_path(
     penlift: Optional[int] = None,
     no_homing: bool = False,
     model: Optional[str] = None,
+    layer: Optional[str] = None,
     original_name: Optional[str] = None,
 ) -> dict[str, Any]:
     if JOB["proc"] and JOB["proc"].poll() is None:
@@ -514,6 +515,8 @@ def _start_plot_from_path(
         cmd.extend(["--penlift", str(penlift)])
     if no_homing:
         cmd.append("--no_homing")
+    if layer:
+        cmd.extend(["--layer", layer])
 
     cmd_str = _format_command(cmd)
     logger.info("Launching nextdraw: %s", cmd_str)

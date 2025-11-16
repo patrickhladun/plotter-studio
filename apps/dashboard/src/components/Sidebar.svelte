@@ -151,6 +151,7 @@
   let speedPenUp = BASE_PLOT_SETTINGS.s_up;
   let penPosDown = BASE_PLOT_SETTINGS.p_down;
   let penPosUp = BASE_PLOT_SETTINGS.p_up;
+  let selectedLayer: string | null = null;
   let devicePenliftMode = BASE_DEVICE_SETTINGS.penlift ?? 1;
   let deviceNoHoming = BASE_DEVICE_SETTINGS.no_homing ?? false;
   let deviceHost = BASE_DEVICE_SETTINGS.host ?? 'localhost';
@@ -281,6 +282,7 @@
       brushless: penliftValue === 3,
       no_homing: Boolean(device.no_homing),
       model: device.nextdraw_model || NEXTDRAW_MODELS[0],
+      layer: selectedLayer,
     };
   };
 
@@ -683,10 +685,64 @@
     }
   }
 
+  function filterSvgByLayer(svgContent: string, layerId: string | null): string {
+    if (!layerId || !svgContent) {
+      return svgContent;
+    }
+
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(svgContent, 'image/svg+xml');
+      const svg = doc.querySelector('svg');
+      if (!svg) {
+        return svgContent;
+      }
+
+      // Find the layer element with the matching ID
+      const layerElement = svg.querySelector(`#${CSS.escape(layerId)}`);
+      if (!layerElement) {
+        // Layer not found, return original
+        return svgContent;
+      }
+
+      // Hide all direct children of SVG that are not the selected layer
+      const directChildren = Array.from(svg.children);
+      directChildren.forEach((child) => {
+        const childId = child.getAttribute('id');
+        if (childId !== layerId) {
+          // Check if this child contains the layer element
+          const containsLayer = child.contains(layerElement);
+          if (!containsLayer) {
+            // Hide elements that don't contain the selected layer
+            const style = child.getAttribute('style') || '';
+            if (!style.includes('display:none') && !style.includes('display: none')) {
+              child.setAttribute('style', style ? `${style}; display: none` : 'display: none');
+            }
+          }
+        } else {
+          // This is the selected layer, ensure it's visible
+          const style = child.getAttribute('style') || '';
+          const cleanedStyle = style.replace(/display\s*:\s*none\s*;?/gi, '').trim();
+          if (cleanedStyle) {
+            child.setAttribute('style', cleanedStyle);
+          } else {
+            child.removeAttribute('style');
+          }
+        }
+      });
+
+      return new XMLSerializer().serializeToString(doc);
+    } catch (error) {
+      console.error('Failed to filter SVG by layer:', error);
+      return svgContent;
+    }
+  }
+
   async function previewFile(name: string) {
     try {
       const svg = await filesApi.raw(name);
-      dispatch('preview', svg);
+      const filteredSvg = filterSvgByLayer(svg, selectedLayer);
+      dispatch('preview', filteredSvg);
     } catch (error) {
       console.error('Preview failed', error);
       pushToast('Preview failed', { tone: 'error' });
@@ -851,6 +907,7 @@
       bind:speedPenUp
       bind:penPosDown
       bind:penPosUp
+      bind:selectedLayer
       bind:devicePenliftMode
       model={deviceNextdrawModel}
       {previewLoading}
@@ -875,6 +932,14 @@
         speedSetting = e.detail;
         if (selectedFile) {
           fetchPreview(selectedFile);
+        }
+      }}
+      on:layerChange={(e) => {
+        selectedLayer = e.detail;
+        if (selectedFile) {
+          // Refresh both the preview metrics and the canvas display
+          fetchPreview(selectedFile);
+          previewFile(selectedFile);
         }
       }}
       on:penliftChange={async (e) => {

@@ -35,6 +35,7 @@ export type PlotSettings = {
   penlift?: number;
   no_homing?: boolean;
   model?: string | null;
+  layer?: string | null;
 };
 
 export type DeviceSettings = {
@@ -258,6 +259,7 @@ export const filesApi = {
       body: JSON.stringify({ angle }),
     }),
   raw: (filename: string) => request<string>(`/files/${encode(filename)}/raw`, {}, 'text'),
+  getLayers: (filename: string) => request<{ layers: string[] }>(`/files/${encode(filename)}/layers`),
   preview: (
     filename: string,
     options: { handling: number; speed: number; penlift?: number; model?: string | null }
