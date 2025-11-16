@@ -28,7 +28,7 @@ PROGRESS_RE = re.compile(r"(?:Progress|Percent complete):\s*([0-9.]+)\s*%", re.I
 TIME_RE = re.compile(r"(?:Elapsed|Time):\s*(\d+):(\d+)(?::(\d+))?", re.IGNORECASE)
 DIST_RE = re.compile(r"(?:Distance|draw):\s*([0-9.]+)\s*([a-zA-Z]*)", re.IGNORECASE)
 
-# Mapping from NextDraw model names to model numbers for -L flag
+# Mapping from Plotter model names to model numbers for -L flag
 NEXTDRAW_MODEL_MAP = {
     'AxiDraw V2, V3, or SE/A4': 1,
     'AxiDraw V3/A3 or SE/A3': 2,
@@ -44,7 +44,7 @@ NEXTDRAW_MODEL_MAP = {
 
 
 def _get_model_number(model_name: Optional[str]) -> Optional[int]:
-    """Convert NextDraw model name to model number for -L flag."""
+    """Convert Plotter model name to model number for -L flag."""
     if not model_name:
         return None
     # Check exact match first
@@ -58,7 +58,7 @@ def _get_model_number(model_name: Optional[str]) -> Optional[int]:
     except (ValueError, TypeError):
         pass
     # Default to model 8 (Bantam Tools NextDraw™ 8511) if not found
-    logger.warning("Unknown NextDraw model '%s', defaulting to model 8", model_name)
+    logger.warning("Unknown Plotter model '%s', defaulting to model 8", model_name)
     return 8
 
 

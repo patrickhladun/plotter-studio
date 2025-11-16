@@ -2,14 +2,22 @@
   import Button from '../Button/Button.svelte';
   import { API_BASE_URL } from '../../lib/rpiApi';
 
+  export let onRefresh: (() => void) | undefined = undefined;
+  export let loading: boolean = false;
+  export let plotProgress: number | null = null;
+  export let plotElapsedSeconds: number | null = null;
+  export let plotDistanceMm: number | null = null;
+  export let previewTimeSeconds: number | null = null;
+  export let previewDistanceMm: number | null = null;
+
   let statusData: any = null;
   let statusError: string | null = null;
-  let loading = false;
+  let fetching = false;
 
   const fetchStatus = async () => {
     statusError = null;
     statusData = null;
-    loading = true;
+    fetching = true;
 
     try {
       const response = await fetch(`${API_BASE_URL}/plot/status`);
@@ -32,7 +40,14 @@
       statusError = error instanceof Error ? error.message : 'Failed to fetch status';
       console.error('API error:', error);
     } finally {
-      loading = false;
+      fetching = false;
+    }
+  };
+
+  const handleRefresh = async () => {
+    await fetchStatus();
+    if (onRefresh) {
+      onRefresh();
     }
   };
 
@@ -56,9 +71,27 @@
 </script>
 
 <div class="space-y-2">
-  <Button on:click={fetchStatus} disabled={loading}>
-    {loading ? 'Refreshing...' : 'Refresh Status'}
+  {#if plotProgress !== null}
+    <div class="flex w-full items-center gap-2">
+      <div class="h-2 flex-1 rounded bg-neutral-700">
+        <div
+          class="h-full rounded bg-green-400 transition-all"
+          style={`width:${Math.max(0, Math.min(plotProgress, 100))}%`}
+        ></div>
+      </div>
+      <span class="text-xs text-neutral-300">{Math.round(plotProgress)}%</span>
+    </div>
+  {/if}
+
+  <div class="space-y-1 text-xs text-neutral-300">
+    <p>Plot time: {plotElapsedSeconds !== null ? formatDuration(plotElapsedSeconds) : previewTimeSeconds !== null ? formatDuration(previewTimeSeconds) : '—'}</p>
+    <p>Distance: {plotDistanceMm !== null ? formatDistance(plotDistanceMm) : previewDistanceMm !== null ? formatDistance(previewDistanceMm) : '—'}</p>
+  </div>
+
+  <Button on:click={handleRefresh} disabled={loading || fetching}>
+    {loading || fetching ? 'Refreshing...' : 'Refresh Status'}
   </Button>
+  
 
   {#if statusError}
     <div class="text-red-400 text-xs p-2 bg-red-900/20 rounded">
@@ -107,3 +140,4 @@
     </div>
   {/if}
 </div>
+

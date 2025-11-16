@@ -12,15 +12,16 @@
   import { showCommandToast, pushToast } from '../lib/toastStore';
   import WalkX from './actions/WalkX.svelte';
   import WalkY from './actions/WalkY.svelte';
-  import PenPosition from './actions/PenPosition.svelte';
   import PenUp from './actions/PenUp.svelte';
   import PenDown from './actions/PenDown.svelte';
   import EnableMotors from './actions/EnableMotors.svelte';
   import DisableMotors from './actions/DisableMotors.svelte';
   import WalkHome from './actions/WalkHome.svelte';
-  import GetStatus from './actions/GetStatus.svelte';
-  import StartPlot from './actions/StartPlot.svelte';
-  import RefreshStatus from './actions/RefreshStatus.svelte';
+  import UploadImage from './sidebar/UploadImage.svelte';
+  import EditImage from './sidebar/EditImage.svelte';
+  import Plot from './sidebar/Plot.svelte';
+  import PrintSettings from './sidebar/PrintSettings.svelte';
+  import DevicePresets from './sidebar/DevicePresets.svelte';
 
   const NEXTDRAW_MODELS = [
     'AxiDraw V2, V3, or SE/A4',
@@ -96,7 +97,6 @@
 
   type PlotProfile = { name: string; settings: PlotSettings; protected?: boolean };
   type DeviceProfile = { name: string; settings: DeviceSettings; protected?: boolean };
-  type SectionKey = 'manage' | 'plot' | 'devices' | 'manual';
 
   const dispatch = createEventDispatcher<{ preview: string }>();
 
@@ -105,12 +105,10 @@
   let selectedMeta: FileMeta | undefined;
   let selectedDimensions = '';
   let isLoading = false;
-  let uploadInProgress = false;
   let plotting = false;
   let rotating = false;
   let renaming = false;
   let stopping = false;
-  let dragActive = false;
   let renameValue = '';
   let plotProgress: number | null = null;
   let plotRunning = false;
@@ -120,7 +118,6 @@
   let previewError: string | null = null;
   let previewTimeSeconds: number | null = null;
   let previewDistanceMm: number | null = null;
-  let uploadInput: HTMLInputElement | null = null;
   let plotProfiles: PlotProfile[] = mergeProfiles(
     PRINT_DEFAULTS,
     {},
@@ -154,28 +151,15 @@
   let speedPenUp = BASE_PLOT_SETTINGS.s_up;
   let penPosDown = BASE_PLOT_SETTINGS.p_down;
   let penPosUp = BASE_PLOT_SETTINGS.p_up;
-let devicePenliftMode = BASE_DEVICE_SETTINGS.penlift ?? 1;
-let deviceNoHoming = BASE_DEVICE_SETTINGS.no_homing ?? false;
-let deviceHost = BASE_DEVICE_SETTINGS.host ?? 'localhost';
-let devicePort = BASE_DEVICE_SETTINGS.port ?? 2222;
-let deviceAxicliPath = BASE_DEVICE_SETTINGS.axicli_path ?? '';
-let deviceHomeOffsetX = BASE_DEVICE_SETTINGS.home_offset_x ?? 0;
-let deviceHomeOffsetY = BASE_DEVICE_SETTINGS.home_offset_y ?? 0;
-let deviceNotes = BASE_DEVICE_SETTINGS.notes ?? '';
-let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS[0];
-
-  let openSection: SectionKey = 'manage';
-
-  const sections: { key: SectionKey; icon: string; label: string }[] = [
-    { key: 'manage', icon: '📁', label: 'Manage Files' },
-    { key: 'plot', icon: '🖊️', label: 'Plot & Settings' },
-    { key: 'devices', icon: '🛠️', label: 'Devices' },
-    { key: 'manual', icon: '🤖', label: 'Manual Commands' },
-  ];
-
-  const selectSection = (key: SectionKey) => {
-    openSection = key;
-  };
+  let devicePenliftMode = BASE_DEVICE_SETTINGS.penlift ?? 1;
+  let deviceNoHoming = BASE_DEVICE_SETTINGS.no_homing ?? false;
+  let deviceHost = BASE_DEVICE_SETTINGS.host ?? 'localhost';
+  let devicePort = BASE_DEVICE_SETTINGS.port ?? 2222;
+  let deviceAxicliPath = BASE_DEVICE_SETTINGS.axicli_path ?? '';
+  let deviceHomeOffsetX = BASE_DEVICE_SETTINGS.home_offset_x ?? 0;
+  let deviceHomeOffsetY = BASE_DEVICE_SETTINGS.home_offset_y ?? 0;
+  let deviceNotes = BASE_DEVICE_SETTINGS.notes ?? '';
+  let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS[0];
 
 
 
@@ -567,98 +551,6 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
   $: selectedMeta = files.find((file) => file.name === selectedFile);
   $: selectedDimensions = describeDimensions(selectedMeta);
 
-  const performUpload = async (file: File | undefined | null) => {
-    if (!file) {
-      return;
-    }
-
-    let saved: FileMeta | null = null;
-    const startTime = Date.now();
-    try {
-      uploadInProgress = true;
-      console.log('[FileManager] Starting upload:', file.name, file.size, 'bytes');
-      saved = await filesApi.upload(file);
-      const duration = Date.now() - startTime;
-      console.log('[FileManager] Upload successful:', saved?.name, `(${duration}ms)`);
-      pushToast(`Uploaded ${saved?.name ?? file.name}`, { tone: 'success' });
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      console.error('[FileManager] Upload failed after', duration, 'ms', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const errorUrl = (error as any)?.url;
-      const errorStatus = (error as any)?.status;
-      const isTimeout = (error as any)?.isTimeout;
-      console.error('[FileManager] Upload error details:', { 
-        errorMessage, 
-        errorUrl, 
-        errorStatus,
-        isTimeout,
-        duration,
-        error: error instanceof Error ? {
-          name: error.name,
-          message: error.message,
-          stack: error.stack,
-        } : error,
-      });
-      
-      let displayMessage = errorMessage;
-      if (isTimeout) {
-        displayMessage = 'Upload timeout - API server may not be running or reachable';
-      } else if (errorMessage.includes('Failed to fetch')) {
-        displayMessage = 'Cannot connect to API server - check if it\'s running on port 2222';
-      }
-      
-      pushToast(`Upload failed: ${displayMessage}${errorUrl ? ` (${errorUrl})` : ''}`, { tone: 'error' });
-      return;
-    } finally {
-      uploadInProgress = false;
-    }
-    const preferred = saved?.name ?? undefined;
-    setTimeout(() => {
-      fetchFiles(preferred).catch((error) => {
-        console.error('Post-upload refresh failed', error);
-        const message = error instanceof Error ? error.message : 'Failed to refresh file list';
-        pushToast(message, { tone: 'error' });
-      });
-    }, 0);
-  };
-
-  const handleUpload = async (event: Event) => {
-    const input = event.currentTarget as HTMLInputElement;
-    const file = input.files?.[0];
-    await performUpload(file);
-    if (input) {
-      input.value = '';
-    }
-  };
-
-  const handleDrop = async (event: DragEvent) => {
-    event.preventDefault();
-    dragActive = false;
-    const file = event.dataTransfer?.files?.[0];
-    await performUpload(file);
-  };
-
-  const handleDragOver = (event: DragEvent) => {
-    event.preventDefault();
-    dragActive = true;
-  };
-
-  const handleDragLeave = (event: DragEvent) => {
-    event.preventDefault();
-    dragActive = false;
-  };
-
-  const handleSelectChange = (event: Event) => {
-    const target = event.currentTarget as HTMLSelectElement | null;
-    const value = target ? target.value : '';
-    if (value) {
-      selectedFile = value;
-      renameValue = value;
-      requestFullPreview(value);
-    }
-  };
-
   const handlePlotStart = () => {
     plotting = true;
     plotRunning = true;
@@ -684,53 +576,6 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
     plotElapsedSeconds = null;
   };
 
-  const handleRotate = async (angle: number) => {
-    if (!selectedFile) {
-      pushToast('Select a file before rotating.', { tone: 'error' });
-      return;
-    }
-
-    try {
-      rotating = true;
-      await filesApi.rotate(selectedFile, angle);
-      await fetchFiles(selectedFile);
-      pushToast(`Rotated ${selectedFile}`, { tone: 'success' });
-    } catch (error) {
-      console.error('Rotation failed', error);
-      const message = error instanceof Error ? error.message : 'Rotation failed';
-      pushToast(message, { tone: 'error' });
-    } finally {
-      rotating = false;
-    }
-  };
-
-  const handleRename = async () => {
-    if (!selectedFile) {
-      pushToast('Select a file before renaming.', { tone: 'error' });
-      return;
-    }
-
-    const trimmed = renameValue.trim();
-    if (!trimmed) {
-      pushToast('Filename cannot be empty.', { tone: 'error' });
-      return;
-    }
-
-    try {
-      renaming = true;
-      const updated = await filesApi.rename(selectedFile, trimmed);
-      selectedFile = updated.name;
-      renameValue = updated.name;
-      await fetchFiles(updated.name);
-      pushToast(`Renamed to ${updated.name}`, { tone: 'success' });
-    } catch (error) {
-      console.error('Rename failed', error);
-      const message = error instanceof Error ? error.message : 'Rename failed';
-      pushToast(message, { tone: 'error' });
-    } finally {
-      renaming = false;
-    }
-  };
 
   const handleStopPlot = async () => {
     try {
@@ -848,26 +693,6 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
     }
   }
 
-  const handleDelete = async (name: string) => {
-    try {
-      await filesApi.remove(name);
-      pushToast(`Deleted ${name}`, { tone: 'success' });
-      await fetchFiles();
-    } catch (error) {
-      console.error('Delete failed', error);
-      pushToast('Delete failed', { tone: 'error' });
-    }
-  };
-
-  const formatSize = (value: number) => {
-    if (value < 1024) {
-      return `${value} B`;
-    }
-    if (value < 1024 * 1024) {
-      return `${(value / 1024).toFixed(1)} KB`;
-    }
-    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-  };
 
   type LengthInfo = { mm: number; approx: boolean } | null;
 
@@ -962,476 +787,181 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
   };
 </script>
 
-<div class="text-xs text-neutral-200">
+<div class="text-xs text-neutral-200 bg-neutral-700 p-2 h-screen overflow-y-scroll">
   <div class="mb-3 text-center text-sm font-semibold uppercase tracking-wide text-neutral-100">
     Plotter Studio
   </div>
 
-  <div class="flex h-full">
-    <nav class="flex w-12 flex-col items-center gap-2 py-2 bg-neutral-900/40">
-      {#each sections as section}
-        <button
-          class={`flex h-10 w-10 items-center justify-center rounded ${
-            openSection === section.key ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700'
-          }`}
-          type="button"
-          aria-label={section.label}
-          aria-pressed={openSection === section.key}
-          on:click={() => selectSection(section.key)}
-        >
-          <span class="text-lg leading-none">{section.icon}</span>
-        </button>
-      {/each}
-    </nav>
+  <div class="flex-1 min-w-0 space-y-4 px-4 py-3 overflow-y-auto">
+    <UploadImage
+      {files}
+      {selectedFile}
+      {isLoading}
+      on:uploaded={(e) => fetchFiles(e.detail)}
+      on:fileSelected={(e) => {
+        selectedFile = e.detail;
+        renameValue = e.detail;
+        requestFullPreview(e.detail);
+      }}
+      on:deleted={() => fetchFiles()}
+      on:refresh={() => fetchFiles()}
+    />
 
-    <div class="flex-1 min-w-0 space-y-4 px-4 py-3">
-      {#if openSection === 'manage'}
-        <div class="space-y-3">
-        <div
-          class={`w-full border-2 border-dashed rounded px-4 py-8 text-center text-neutral-300 transition ${
-            dragActive ? 'border-blue-400 bg-neutral-800/40' : 'border-neutral-600 bg-neutral-800/60'
-          } ${uploadInProgress ? 'opacity-60' : ''}`}
-            role="button"
-            aria-label="Upload SVG by dragging or selecting a file"
-            tabindex="0"
-            on:dragover={handleDragOver}
-            on:dragleave={handleDragLeave}
-            on:drop={handleDrop}
-            on:keydown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                uploadInput?.click();
-              }
-            }}
-          >
-            <p class="text-sm">Drag & drop an SVG here, or</p>
-            <label class="inline-flex items-center justify-center mt-2">
-              <span class="bg-blue-500 hover:bg-blue-400 text-white text-xs font-medium px-3 py-1 rounded cursor-pointer">
-                {uploadInProgress ? 'Uploading…' : 'Browse Files'}
-              </span>
-              <input
-                type="file"
-                accept=".svg"
-                on:change={handleUpload}
-                class="hidden"
-                disabled={uploadInProgress}
-                bind:this={uploadInput}
-              />
-            </label>
-          </div>
+    <EditImage
+      {selectedFile}
+      {selectedDimensions}
+      bind:renameValue
+      bind:renaming
+      bind:rotating
+      on:renamed={(e) => {
+        selectedFile = e.detail;
+        renameValue = e.detail;
+        fetchFiles(e.detail);
+      }}
+      on:rotated={() => fetchFiles(selectedFile)}
+    />
 
-          <div class="space-y-2">
-            <label class="flex flex-col">
-              Select file
-              <select
-                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-                bind:value={selectedFile}
-                disabled={isLoading || files.length === 0}
-                on:change={handleSelectChange}
-              >
-                <option value="" disabled>
-                  {files.length === 0 ? 'No files available' : 'Choose a file'}
-                </option>
-                {#each files as file}
-                  <option value={file.name}>{file.name} ({formatSize(file.size)})</option>
-                {/each}
-              </select>
-            </label>
+    <Plot
+      {selectedFile}
+      plotSettings={buildPlotPayload()}
+      {plotProgress}
+      {plotElapsedSeconds}
+      {plotDistanceMm}
+      {previewTimeSeconds}
+      {previewDistanceMm}
+      {plotting}
+      {plotRunning}
+      {rotating}
+      {stopping}
+      on:plotStart={handlePlotStart}
+      on:plotComplete={(e) => handlePlotComplete(e.detail)}
+      on:plotError={(e) => handlePlotError(e.detail)}
+      on:statusPoll={pollStatus}
+      on:stopPlot={handleStopPlot}
+    />
 
-            <button
-              class="text-blue-300 hover:text-blue-200 self-start text-xs"
-              on:click={() => fetchFiles()}
-              type="button"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Refreshing…' : 'Refresh file list'}
-            </button>
+    <PrintSettings
+      {selectedFile}
+      bind:selectedProfile
+      {availablePlotProfiles}
+      bind:newProfileName
+      bind:handlingMode
+      bind:speedSetting
+      bind:speedPenDown
+      bind:speedPenUp
+      bind:penPosDown
+      bind:penPosUp
+      bind:devicePenliftMode
+      model={deviceNextdrawModel}
+      {previewLoading}
+      {previewError}
+      {previewTimeSeconds}
+      {previewDistanceMm}
+      on:profileChange={(e) => {
+        applyProfileSettings(e.detail);
+        if (selectedFile) {
+          fetchPreview(selectedFile);
+        }
+      }}
+      on:profileSave={handleSaveProfile}
+      on:profileDelete={handleDeleteProfile}
+      on:handlingChange={(e) => {
+        handlingMode = e.detail;
+        if (selectedFile) {
+          fetchPreview(selectedFile);
+        }
+      }}
+      on:speedChange={(e) => {
+        speedSetting = e.detail;
+        if (selectedFile) {
+          fetchPreview(selectedFile);
+        }
+      }}
+      on:penliftChange={async (e) => {
+        devicePenliftMode = e.detail;
+        if (selectedDeviceProfile === 'Default Device') {
+          const settings = currentDeviceSettings();
+          await saveDeviceConfig(selectedDeviceProfile, settings);
+        }
+        if (selectedFile) {
+          fetchPreview(selectedFile);
+        }
+      }}
+      on:settingsChange={() => {
+        if (selectedFile) {
+          fetchPreview(selectedFile);
+        }
+      }}
+    />
 
-            {#if selectedFile}
-              <button
-                class="bg-red-500 py-1 px-2 text-xs rounded cursor-pointer hover:bg-red-400 self-start"
-                type="button"
-                on:click={() => handleDelete(selectedFile)}
-              >
-                Delete selected
-              </button>
-            {/if}
-          </div>
+    <DevicePresets
+      bind:selectedDeviceProfile
+      {availableDeviceProfiles}
+      bind:newDeviceName
+      bind:deviceNextdrawModel
+      bind:deviceHost
+      bind:devicePort
+      bind:deviceAxicliPath
+      bind:deviceHomeOffsetX
+      bind:deviceHomeOffsetY
+      bind:deviceNotes
+      bind:devicePenliftMode
+      bind:deviceNoHoming
+      NEXTDRAW_MODELS={NEXTDRAW_MODELS}
+      on:presetChange={async (e) => {
+        await applyDeviceProfile(e.detail);
+        if (selectedFile) {
+          fetchPreview(selectedFile);
+        }
+      }}
+      on:presetSave={handleDeviceSave}
+      on:presetDelete={handleDeviceDelete}
+      on:modelChange={async (e) => {
+        deviceNextdrawModel = e.detail;
+        if (selectedDeviceProfile === 'Default Device') {
+          const settings = currentDeviceSettings();
+          await saveDeviceConfig(selectedDeviceProfile, settings);
+        }
+        if (selectedFile) {
+          fetchPreview(selectedFile);
+        }
+      }}
+      on:penliftChange={async (e) => {
+        devicePenliftMode = e.detail;
+        if (selectedDeviceProfile === 'Default Device') {
+          const settings = currentDeviceSettings();
+          await saveDeviceConfig(selectedDeviceProfile, settings);
+        }
+        if (selectedFile) {
+          fetchPreview(selectedFile);
+        }
+      }}
+      on:settingsChange={() => {
+        if (selectedFile) {
+          fetchPreview(selectedFile);
+        }
+      }}
+    />
+
+    <!-- Manual Controls -->
+    <div class="space-y-3 border-t border-neutral-700">
+      <div class="py-4 border-b border-neutral-600 text-xs text-neutral-200">
+        <h2 class="font-semibold mb-2 text-sm text-white">Manual Controls</h2>
+        <div class="flex flex-wrap gap-2">
+          <PenUp model={deviceNextdrawModel} />
+          <PenDown model={deviceNextdrawModel} />
+          <EnableMotors model={deviceNextdrawModel} />
+          <DisableMotors model={deviceNextdrawModel} />
+          <WalkHome />
         </div>
-
-        {#if selectedFile}
-          <div class="space-y-3">
-            {#if selectedDimensions}
-              <p class="text-neutral-400 text-xs">Dimensions: {selectedDimensions}</p>
-            {/if}
-
-            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
-              <input
-                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100 flex-1"
-                type="text"
-                bind:value={renameValue}
-                placeholder="Filename"
-                disabled={renaming}
-              />
-              <button
-                class="bg-neutral-500 hover:bg-neutral-400 text-white text-xs font-medium px-3 py-1 rounded self-start sm:self-auto"
-                type="button"
-                on:click={handleRename}
-                disabled={renaming}
-              >
-                {renaming ? 'Renaming…' : 'Save name'}
-              </button>
-            </div>
-
-            <div class="flex gap-2">
-              <button
-                class="bg-neutral-600 py-1 px-2 text-xs rounded cursor-pointer hover:bg-neutral-500 self-start"
-                type="button"
-                on:click={() => handleRotate(-90)}
-                disabled={rotating}
-              >
-                {rotating ? 'Rotating…' : 'Rotate -90°'}
-              </button>
-              <button
-                class="bg-neutral-600 py-1 px-2 text-xs rounded cursor-pointer hover:bg-neutral-500 self-start"
-                type="button"
-                on:click={() => handleRotate(90)}
-                disabled={rotating}
-              >
-                {rotating ? 'Rotating…' : 'Rotate +90°'}
-              </button>
-            </div>
-          </div>
-        {:else}
-          <p class="text-neutral-400 text-xs">Select a file to edit its details.</p>
-        {/if}
-
-        
-      {:else if openSection === 'plot'}
-        {#if selectedFile}
-          {#if plotProgress !== null}
-            <div class="flex w-full items-center gap-2">
-              <div class="h-2 flex-1 rounded bg-neutral-700">
-                <div
-                  class="h-full rounded bg-green-400 transition-all"
-                  style={`width:${Math.max(0, Math.min(plotProgress, 100))}%`}
-                ></div>
-              </div>
-              <span class="text-xs text-neutral-300">{Math.round(plotProgress)}%</span>
-            </div>
-          {/if}
-
-          <div class="space-y-1 text-xs text-neutral-300">
-            <p>Plot time: {plotElapsedSeconds !== null ? formatDuration(plotElapsedSeconds) : previewTimeSeconds !== null ? formatDuration(previewTimeSeconds) : '—'}</p>
-            <p>Distance: {plotDistanceMm !== null ? formatDistance(plotDistanceMm) : previewDistanceMm !== null ? formatDistance(previewDistanceMm) : '—'}</p>
-          </div>
-
-          <div class="flex flex-wrap gap-2">
-            <StartPlot
-              selectedFile={selectedFile}
-              plotSettings={buildPlotPayload()}
-              plotting={plotting}
-              plotRunning={plotRunning}
-              rotating={rotating}
-              onPlotStart={handlePlotStart}
-              onPlotComplete={handlePlotComplete}
-              onPlotError={handlePlotError}
-              onStatusPoll={pollStatus}
-            />
-            <RefreshStatus onRefresh={pollStatus} loading={false} />
-            {#if plotRunning}
-              <button
-                class="bg-yellow-500 py-1 px-2 text-xs rounded cursor-pointer hover:bg-yellow-400"
-                type="button"
-                on:click={handleStopPlot}
-                disabled={stopping}
-              >
-                {stopping ? 'Stopping…' : 'Stop Plot'}
-              </button>
-            {/if}
-          </div>
-          <div class="mt-4 border-t border-neutral-700 pt-4 space-y-3">
-            <h3 class="text-xs font-semibold uppercase tracking-wide text-neutral-400">
-              Print Settings
-            </h3>
-            <div class="space-y-1">
-              <label class="flex flex-col text-xs text-neutral-300 gap-1">
-                Preset
-                <select
-                  class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-                  bind:value={selectedProfile}
-                  on:change={handleProfileChange}
-                >
-                  {#each availablePlotProfiles as profile}
-                    <option value={profile.name}>{profile.name}</option>
-                  {/each}
-                </select>
-              </label>
-              <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <input
-                  type="text"
-                  class="flex-1 rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-                  placeholder="Preset name"
-                  bind:value={newProfileName}
-                />
-                <button
-                  class="bg-blue-500 hover:bg-blue-400 text-white text-xs font-medium px-3 py-1 rounded"
-                  type="button"
-                  on:click={handleSaveProfile}
-                >
-                  Save preset
-                </button>
-                {#if availablePlotProfiles.find((profile) => profile.name === selectedProfile)?.protected !== true}
-                  <button
-                    class="bg-red-500 hover:bg-red-400 text-white text-xs font-medium px-3 py-1 rounded"
-                    type="button"
-                    on:click={handleDeleteProfile}
-                  >
-                    Delete preset
-                  </button>
-                {/if}
-              </div>
-            </div>
-
-            <label class="flex flex-col gap-1 text-xs text-neutral-300">
-              <span>Handling mode</span>
-              <select
-                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-                bind:value={handlingMode}
-                on:change={handleHandlingChange}
-              >
-                <option value={1}>1 — Technical drawing (default)</option>
-                <option value={2}>2 — Handwriting</option>
-                <option value={3}>3 — Sketching</option>
-                <option value={4}>4 — Constant speed</option>
-                <option value={5}>5 — Off (no handling flag)</option>
-              </select>
-            </label>
-
-            {#if handlingMode === 4}
-              <label class="flex flex-col gap-1">
-                <span>Speed: {speedSetting}%</span>
-                <input
-                  type="range"
-                  min="1"
-                  max="100"
-                  bind:value={speedSetting}
-                  on:change={() => fetchPreview(selectedFile)}
-                />
-              </label>
-            {/if}
-
-              <label class="flex flex-col gap-1 text-xs text-neutral-300">
-                <span>Pen lift mode</span>
-                <select
-                  class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-                  bind:value={devicePenliftMode}
-                  on:change={handleDevicePenliftChange}
-                >
-                  <option value={1}>1 — Default (AxiDraw)</option>
-                  <option value={2}>2 — NextDraw Future</option>
-                  <option value={3}>3 — Brushless upgrade</option>
-                </select>
-              </label>
-
-            <div class="grid gap-2 sm:grid-cols-2">
-              <label class="flex flex-col text-xs gap-1">
-                <span>Pen-down speed (%)</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  step="1"
-                  class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-                  bind:value={speedPenDown}
-                />
-              </label>
-              <label class="flex flex-col text-xs gap-1">
-                <span>Pen-up speed (%)</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  step="1"
-                  class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-                  bind:value={speedPenUp}
-                />
-              </label>
-              <label class="flex flex-col text-xs gap-1">
-                <span>Pen-down position</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="1"
-                  class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-                  bind:value={penPosDown}
-                />
-              </label>
-              <label class="flex flex-col text-xs gap-1">
-                <span>Pen-up position</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="1"
-                  class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-                  bind:value={penPosUp}
-                />
-              </label>
-            </div>
-
-            {#if previewLoading}
-              <p class="text-neutral-400 text-xs">Estimating plot time…</p>
-            {:else if previewError}
-              <p class="text-red-400 text-xs">{previewError}</p>
-            {:else if previewTimeSeconds !== null || previewDistanceMm !== null}
-              <div class="space-y-1 text-xs text-neutral-300">
-                {#if previewTimeSeconds !== null}
-                  <p>Estimated time: {formatDuration(previewTimeSeconds)}</p>
-                {/if}
-                {#if previewDistanceMm !== null}
-                  <p>Estimated distance: {formatDistance(previewDistanceMm)}</p>
-                {/if}
-              </div>
-            {/if}
-          </div>
-        {:else}
-          <p class="text-neutral-400 text-xs">Select a file to view plotting controls and settings.</p>
-        {/if}
-      {:else if openSection === 'devices'}
-        <div class="space-y-4 text-xs text-neutral-200">
-          <div class="space-y-2">
-            <label class="flex flex-col gap-1">
-              Device preset
-              <select
-                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-                bind:value={selectedDeviceProfile}
-                on:change={handleDevicePresetChange}
-              >
-                {#each availableDeviceProfiles as profile}
-                  <option value={profile.name}>{profile.name}</option>
-                {/each}
-              </select>
-            </label>
-            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <input
-                type="text"
-                class="flex-1 rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-                placeholder="Preset name"
-                bind:value={newDeviceName}
-              />
-              <button
-                class="bg-blue-500 hover:bg-blue-400 text-white text-xs font-medium px-3 py-1 rounded"
-                type="button"
-                on:click={handleDeviceSave}
-              >
-                Save device
-              </button>
-              {#if availableDeviceProfiles.find((profile) => profile.name === selectedDeviceProfile)?.protected !== true}
-                <button
-                  class="bg-red-500 hover:bg-red-400 text-white text-xs font-medium px-3 py-1 rounded"
-                  type="button"
-                  on:click={handleDeviceDelete}
-                >
-                  Delete device
-                </button>
-              {/if}
-            </div>
-            <label class="flex flex-col gap-1">
-              NextDraw model
-              <select
-                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-                bind:value={deviceNextdrawModel}
-                on:change={handleNextdrawModelChange}
-              >
-                {#each NEXTDRAW_MODELS as modelName}
-                  <option value={modelName}>{modelName}</option>
-                {/each}
-              </select>
-            </label>
-          </div>
-
-          <div class="grid gap-3 sm:grid-cols-2">
-            <label class="flex flex-col gap-1">
-              <span>Host</span>
-              <input
-                type="text"
-                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-                bind:value={deviceHost}
-              />
-            </label>
-            <label class="flex flex-col gap-1">
-              <span>Port</span>
-              <input
-                type="number"
-                min="1"
-                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-                bind:value={devicePort}
-              />
-            </label>
-            <label class="flex flex-col gap-1">
-              <span>NextDraw/AxiCLI path</span>
-              <input
-                type="text"
-                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-                bind:value={deviceAxicliPath}
-              />
-            </label>
-            <label class="flex flex-col gap-1">
-              <span>Home offset X (mm)</span>
-              <input
-                type="number"
-                step="0.1"
-                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-                bind:value={deviceHomeOffsetX}
-              />
-            </label>
-            <label class="flex flex-col gap-1">
-              <span>Home offset Y (mm)</span>
-              <input
-                type="number"
-                step="0.1"
-                class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-                bind:value={deviceHomeOffsetY}
-              />
-            </label>
-          </div>
-          <label class="flex flex-col gap-1">
-            <span>Notes</span>
-            <textarea
-              class="min-h-[80px] rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-              bind:value={deviceNotes}
-            />
-          </label>
-          <label class="flex items-center gap-2">
-            <input type="checkbox" bind:checked={deviceNoHoming} />
-            <span>Skip homing before plots (`--no_homing`)</span>
-          </label>
+      </div>
+      <div class="py-4 border-b border-neutral-600 text-xs text-neutral-200">
+        <h2 class="font-semibold mb-2 text-sm text-white">Move Pen</h2>
+        <div class="space-y-2">
+          <WalkX model={deviceNextdrawModel} />
+          <WalkY model={deviceNextdrawModel} />
         </div>
-      {:else}
-        <div class="space-y-3">
-          <div class="py-4 border-b border-neutral-600 text-xs text-neutral-200">
-            <h2 class="font-semibold mb-2 text-sm text-white">Manual Controls</h2>
-            <div class="flex flex-wrap gap-2">
-              <PenUp model={deviceNextdrawModel} />
-              <PenDown model={deviceNextdrawModel} />
-              <EnableMotors model={deviceNextdrawModel} />
-              <DisableMotors model={deviceNextdrawModel} />
-              <WalkHome />
-            </div>
-          </div>
-          <div class="py-4 border-b border-neutral-600 text-xs text-neutral-200">
-            <h2 class="font-semibold mb-2 text-sm text-white">Move Pen</h2>
-            <div class="space-y-2">
-              <WalkX model={deviceNextdrawModel} />
-              <WalkY model={deviceNextdrawModel} />
-            </div>
-          </div>
-          <PenPosition model={deviceNextdrawModel} />
-          <GetStatus />
-        </div>
-      {/if}
+      </div>
     </div>
   </div>
 </div>

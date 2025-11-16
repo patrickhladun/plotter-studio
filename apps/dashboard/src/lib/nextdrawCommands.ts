@@ -1,5 +1,5 @@
 /**
- * NextDraw model mapping and command building utilities
+ * Plotter model mapping and command building utilities
  */
 
 export const NEXTDRAW_MODELS = [
@@ -15,7 +15,7 @@ export const NEXTDRAW_MODELS = [
   "Bantam Tools NextDraw™ 2234",
 ] as const;
 
-// Mapping from NextDraw model names to model numbers for -L flag
+// Mapping from Plotter model names to model numbers for -L flag
 const NEXTDRAW_MODEL_MAP: Record<string, number> = {
   "AxiDraw V2, V3, or SE/A4": 1,
   "AxiDraw V3/A3 or SE/A3": 2,
@@ -30,7 +30,7 @@ const NEXTDRAW_MODEL_MAP: Record<string, number> = {
 };
 
 /**
- * Convert NextDraw model name to model number for -L flag
+ * Convert Plotter model name to model number for -L flag
  */
 export function getModelNumber(
   modelName: string | null | undefined
@@ -48,7 +48,7 @@ export function getModelNumber(
     return modelNum;
   }
   // Default to model 8 (Bantam Tools NextDraw™ 8511) if not found
-  console.warn(`Unknown NextDraw model '${modelName}', defaulting to model 8`);
+  console.warn(`Unknown Plotter model '${modelName}', defaulting to model 8`);
   return 8;
 }
 

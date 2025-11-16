@@ -1,7 +1,7 @@
 <script lang="ts">
   import CanvasWorkspace from './components/Canvas/CanvasWorkspace.svelte';
   import SvgLoader from './components/SvgLoader/SvgLoader.svelte';
-  import FileManager from './components/FileManager.svelte';
+  import Sidebar from './components/Sidebar.svelte';
   import ToastHost from './components/ToastHost.svelte';
 
   let svgContent: string | null = null;
@@ -25,13 +25,7 @@
       {showSidebar ? 'Show Canvas' : 'Show Controls'}
     </button>
   </div>
-  <aside
-    class={`bg-neutral-700 space-y-4 transition-all duration-200 ${
-      showSidebar ? 'w-full md:w-96' : 'w-0 md:w-96 md:block'
-    } ${showSidebar ? 'block' : 'hidden md:block'} overflow-hidden`}
-  >
-    <FileManager on:preview={handleSvgLoad} />
-  </aside>
+    <Sidebar on:preview={handleSvgLoad} />
   <main
     class={`flex-1 flex flex-col overflow-hidden transition-all duration-200 ${
       showSidebar ? 'hidden md:flex' : 'flex'
