@@ -25,16 +25,26 @@ const inferBaseUrl = () => {
     return '';
   }
 
+  // Production mode: if dashboard is on port 3131, API is on port 3333
   if (window.location.port === '3131' && window.location.hostname !== 'localhost') {
     return `${window.location.protocol}//${window.location.hostname}:3333`;
   }
 
+  // Default: use same origin (for production when ports match or other scenarios)
   return window.location.origin;
 };
 
 export const API_BASE_URL = inferBaseUrl();
 
-// Debug logging in dev mode
-if (typeof window !== 'undefined' && import.meta.env?.DEV) {
-  console.log('[rpiApi] API_BASE_URL:', API_BASE_URL || '(empty - using proxy)');
+// Debug logging
+if (typeof window !== 'undefined') {
+  const isDev = import.meta.env?.DEV;
+  const isProd = import.meta.env?.PROD;
+  console.log('[rpiApi] Environment:', {
+    DEV: isDev,
+    PROD: isProd,
+    MODE: import.meta.env?.MODE,
+    API_BASE_URL: API_BASE_URL || '(empty - using proxy)',
+    windowLocation: `${window.location.protocol}//${window.location.hostname}:${window.location.port}`,
+  });
 }

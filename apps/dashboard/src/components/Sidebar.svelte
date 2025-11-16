@@ -218,8 +218,18 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
       }
     } catch (error) {
       console.error('Failed to load files', error);
-      const message = error instanceof Error ? error.message : 'Failed to load files';
-      pushToast(message, { tone: 'error' });
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load files';
+      const errorUrl = (error as any)?.url;
+      const isTimeout = (error as any)?.isTimeout;
+      
+      let message = errorMessage;
+      if (isTimeout) {
+        message = 'Request timeout - API server may not be reachable';
+      } else if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+        message = 'Cannot connect to API server - check network connection and CORS settings';
+      }
+      
+      pushToast(`Load failed: ${message}${errorUrl ? ` (${errorUrl})` : ''}`, { tone: 'error' });
     } finally {
       isLoading = false;
     }

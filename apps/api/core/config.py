@@ -41,6 +41,8 @@ DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
     "http://127.0.0.1:5173",
     "http://localhost:3131",
     "http://127.0.0.1:3131",
+    # Production dashboard port
+    "http://192.168.1.37:3131",
 )
 
 
@@ -53,12 +55,16 @@ def cors_origins(extra: Sequence[str] | None = None) -> list[str]:
 
 
 def dashboard_origin_regex() -> Optional[str]:
-    """Allow dashboard to access API from any host when using its configured port."""
+    """Allow dashboard to access API from any host when using its configured port.
+    
+    Supports both development (2121, 5173) and production (3131) ports.
+    """
     port = os.getenv("DASHBOARD_PORT")
     if not port:
-        return None
+        # If no port specified, allow common dev and production ports
+        return r"^https?://[^/]+:(2121|5173|3131)$"
     port = port.strip()
     if not port:
-        return None
+        return r"^https?://[^/]+:(2121|5173|3131)$"
     escaped = re.escape(port)
     return rf"^https?://[^/]+:{escaped}$"
