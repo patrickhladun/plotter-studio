@@ -8,7 +8,7 @@
 
   let penBusy = false;
 
-  const handlePenUp = async () => {
+  const handlePenLower = async () => {
     try {
       penBusy = true;
       const modelNumber = getModelNumber(model);
@@ -16,12 +16,12 @@
       if (modelNumber !== null) {
         parts.push(`-L${modelNumber}`);
       }
-      parts.push('-m', 'utility', '-M', 'pen_up');
+      parts.push('-m', 'utility', '-M', 'lower_up');
       const command = parts.join(' ');
-      const result = await executeCommand(command, 'Pen up');
+      const result = await executeCommand(command, 'Pen lower');
 
       if (!result.success) {
-        pushToast(result.error || 'Pen up failed', { tone: 'error' });
+        pushToast(result.error || 'Pen lower failed', { tone: 'error' });
         return;
       }
 
@@ -32,22 +32,22 @@
         ? `Pen ${state}`
         : stdout && stdout.trim().length > 0
           ? stdout.trim().split('\n')[0]
-          : 'Pen up';
+          : 'Pen lowered';
       pushToast(inferredMessage, { tone: 'success' });
     } catch (error) {
       console.error('Error:', error);
-      pushToast('Pen up failed', { tone: 'error' });
+      pushToast('Pen lower failed', { tone: 'error' });
     } finally {
       penBusy = false;
     }
   };
 </script>
 
-<Button on:click={handlePenUp} disabled={penBusy}>
+<Button on:click={handlePenLower} disabled={penBusy}>
   {#if penBusy}
     Moving...
   {:else}
-    Pen Up
+    Pen Lower
   {/if}
 </Button>
 

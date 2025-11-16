@@ -11,8 +11,8 @@
   import { showCommandToast, pushToast } from '../lib/toastStore';
   import WalkX from './actions/WalkX.svelte';
   import WalkY from './actions/WalkY.svelte';
-  import PenUp from './actions/PenUp.svelte';
-  import PenDown from './actions/PenDown.svelte';
+import PenRaise from './actions/PenRaise.svelte';
+import PenLower from './actions/PenLower.svelte';
   import EnableMotors from './actions/EnableMotors.svelte';
   import DisableMotors from './actions/DisableMotors.svelte';
   import WalkHome from './actions/WalkHome.svelte';
@@ -1199,8 +1199,8 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
           <div class="py-4 border-b border-neutral-600 text-xs text-neutral-200">
             <h2 class="font-semibold mb-2 text-sm text-white">Manual Controls</h2>
             <div class="flex flex-wrap gap-2">
-              <PenUp model={deviceNextdrawModel} />
-              <PenDown model={deviceNextdrawModel} />
+              <PenRaise model={deviceNextdrawModel} />
+              <PenLower model={deviceNextdrawModel} />
               <EnableMotors model={deviceNextdrawModel} />
               <DisableMotors model={deviceNextdrawModel} />
               <WalkHome />
