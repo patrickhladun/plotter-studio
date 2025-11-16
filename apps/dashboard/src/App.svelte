@@ -44,7 +44,7 @@
       {showSidebar ? 'Show Canvas' : 'Show Controls'}
     </button>
   </div>
-  <div class={`${showSidebar ? 'flex' : 'hidden md:flex'} flex-shrink-0`}>
+  <div class={`${showSidebar ? 'flex' : 'hidden md:flex'} flex-shrink-0 w-full md:w-auto`}>
     <Sidebar on:preview={handleSvgLoad} />
   </div>
   <main

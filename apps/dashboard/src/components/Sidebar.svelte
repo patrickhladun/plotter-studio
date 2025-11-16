@@ -1001,7 +1001,7 @@ let deviceNextdrawModel: number = BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT
   };
 </script>
 
-<div class="text-xs text-neutral-200 bg-neutral-700 p-2 h-screen flex flex-col">
+<div class="text-xs text-neutral-200 bg-neutral-700 p-2 h-screen flex flex-col w-full">
   <div class="mb-3 text-center text-sm font-semibold uppercase tracking-wide text-neutral-100 flex-shrink-0">
     Plotter Studio
   </div>
