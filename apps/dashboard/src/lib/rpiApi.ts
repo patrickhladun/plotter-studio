@@ -18,8 +18,16 @@ const inferBaseUrl = (): string => {
   }
 
   const envOverride = import.meta.env?.VITE_API_BASE_URL;
+  // Only use VITE_API_BASE_URL if it's not localhost (to avoid hardcoded localhost in production)
   if (typeof envOverride === "string" && envOverride.trim().length > 0) {
-    return envOverride.trim();
+    const trimmed = envOverride.trim();
+    // Don't use localhost URLs in production - let runtime detection handle it
+    if (!trimmed.includes("localhost") && !trimmed.includes("127.0.0.1")) {
+      return trimmed;
+    }
+    console.warn(
+      "[rpiApi] Ignoring VITE_API_BASE_URL with localhost, using runtime detection instead"
+    );
   }
 
   // Check if we're in dev mode (Vite dev server)

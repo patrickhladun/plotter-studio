@@ -97,11 +97,10 @@ mkdir -p "${PLOTTERSTUDIO_DATA_DIR:-uploads}"
 LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
 
 echo "🔧 Using ${ENV_LABEL} environment overrides from ${ENV_OVERRIDE_FILE}"
-# In dev mode, don't set VITE_API_BASE_URL so the dashboard uses the Vite proxy
-# In production, set it so the dashboard knows where the API is
-if [ "$DEV_MODE" != "dev" ]; then
-  export VITE_API_BASE_URL="http://localhost:${PLOTTERSTUDIO_PORT:-3333}"
-fi
+# Don't set VITE_API_BASE_URL - let the dashboard code determine the API URL at runtime
+# This allows it to work with both localhost and network IPs
+# In dev mode, the dashboard uses the Vite proxy (empty API_BASE_URL)
+# In production, the dashboard detects the port and uses the same hostname
 
 echo ""
 echo "🚀 Starting Plotter Studio..."
