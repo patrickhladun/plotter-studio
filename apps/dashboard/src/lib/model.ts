@@ -167,12 +167,15 @@ export const buildPlotCommand = (
     parts.push("--speed_penup", String(settings.s_up));
   }
 
-  // Add pen position settings
-  if (settings.p_down !== undefined) {
-    parts.push("--pen_pos_down", String(settings.p_down));
+  // Add pen position settings (always include if they are valid numbers)
+  // Note: 0 is a valid pen position, so we check for finite numbers, not truthy values
+  const pDown = settings.p_down;
+  const pUp = settings.p_up;
+  if (pDown !== undefined && pDown !== null && Number.isFinite(Number(pDown))) {
+    parts.push("--pen_pos_down", String(pDown));
   }
-  if (settings.p_up !== undefined) {
-    parts.push("--pen_pos_up", String(settings.p_up));
+  if (pUp !== undefined && pUp !== null && Number.isFinite(Number(pUp))) {
+    parts.push("--pen_pos_up", String(pUp));
   }
 
   // Add handling mode

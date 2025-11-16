@@ -46,6 +46,8 @@ export type DeviceSettings = {
   penlift?: number;
   no_homing?: boolean;
   nextdraw_model?: number | null; // Changed from string to number
+  p_down?: number; // Pen down position
+  p_up?: number; // Pen up position
 };
 
 export type DeviceConfig = {

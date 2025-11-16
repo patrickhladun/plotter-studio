@@ -145,6 +145,8 @@
 let devicePenliftMode = BASE_DEVICE_SETTINGS.penlift ?? 1;
 let deviceNoHoming = BASE_DEVICE_SETTINGS.no_homing ?? false;
 let deviceAxicliPath = BASE_DEVICE_SETTINGS.axicli_path ?? '';
+let devicePenPosDown = BASE_DEVICE_SETTINGS.p_down ?? 40;
+let devicePenPosUp = BASE_DEVICE_SETTINGS.p_up ?? 70;
 let deviceHomeOffsetX = BASE_DEVICE_SETTINGS.home_offset_x ?? 0;
 let deviceHomeOffsetY = BASE_DEVICE_SETTINGS.home_offset_y ?? 0;
 let deviceNotes = BASE_DEVICE_SETTINGS.notes ?? '';
@@ -294,6 +296,8 @@ let deviceNextdrawModel: number = BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT
     penlift: devicePenliftMode,
     no_homing: deviceNoHoming,
       nextdraw_model: deviceNextdrawModel || null,
+    p_down: Number.isFinite(Number(devicePenPosDown)) ? Number(devicePenPosDown) : undefined,
+    p_up: Number.isFinite(Number(devicePenPosUp)) ? Number(devicePenPosUp) : undefined,
     };
     console.log('[currentDeviceSettings] Returning settings with model:', settings.nextdraw_model);
     return settings;
@@ -308,8 +312,12 @@ let deviceNextdrawModel: number = BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT
       ? deviceNextdrawModel 
       : DEFAULT_MODEL_NUMBER;
     const modelName = getModelName(modelNumber);
+    const printPayload = getPrintProfilePayload();
     const payload = {
-      ...getPrintProfilePayload(),
+      ...printPayload,
+      // Override pen positions with device preset values
+      p_down: device.p_down ?? printPayload.p_down,
+      p_up: device.p_up ?? printPayload.p_up,
       penlift: penliftValue,
       brushless: penliftValue === 3,
       no_homing: Boolean(device.no_homing),
@@ -318,6 +326,7 @@ let deviceNextdrawModel: number = BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT
     };
     console.log('[Sidebar] buildPlotPayload - selectedLayer:', selectedLayer);
     console.log('[Sidebar] buildPlotPayload - payload.layer:', payload.layer);
+    console.log('[Sidebar] buildPlotPayload - pen positions from device:', { p_down: device.p_down, p_up: device.p_up });
     return payload;
   };
 
@@ -325,10 +334,16 @@ let deviceNextdrawModel: number = BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT
   // Track all dependencies that affect plot settings
   let currentPlotSettings: PlotSettings = buildPlotPayload();
   $: {
+    // Reference all dependencies so Svelte tracks them
+    const _ = devicePenPosDown, __ = devicePenPosUp, ___ = selectedLayer, ____ = selectedFile, _____ = deviceNextdrawModel;
+    const ______ = speedPenDown, _______ = speedPenUp, ________ = handlingMode, _________ = speedSetting;
+    const __________ = devicePenliftMode, ___________ = deviceNoHoming;
+    
     // This reactive block will run whenever any of its dependencies change
-    // including selectedLayer, selectedFile, deviceNextdrawModel, speedPenDown, etc.
     currentPlotSettings = buildPlotPayload();
     console.log('[Sidebar] currentPlotSettings updated, layer:', currentPlotSettings.layer, 'selectedLayer:', selectedLayer);
+    console.log('[Sidebar] currentPlotSettings - pen positions:', { p_down: currentPlotSettings.p_down, p_up: currentPlotSettings.p_up });
+    console.log('[Sidebar] devicePenPosDown:', devicePenPosDown, 'devicePenPosUp:', devicePenPosUp);
   }
 
   const handleSaveProfile = async () => {
@@ -464,6 +479,8 @@ let deviceNextdrawModel: number = BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT
       typeof settings.no_homing === 'boolean'
         ? settings.no_homing
         : Boolean(BASE_DEVICE_SETTINGS.no_homing);
+    devicePenPosDown = settings.p_down ?? BASE_DEVICE_SETTINGS.p_down ?? 40;
+    devicePenPosUp = settings.p_up ?? BASE_DEVICE_SETTINGS.p_up ?? 70;
     const savedModel = settings.nextdraw_model ?? BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT_MODEL_NUMBER;
     // Convert to number (handles both string and number for backward compatibility)
     const modelNumber = getModelNumber(savedModel);
@@ -1084,6 +1101,8 @@ let deviceNextdrawModel: number = BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT
       bind:speedPenUp
       bind:penPosDown
       bind:penPosUp
+      bind:devicePenPosDown
+      bind:devicePenPosUp
       bind:selectedLayer
       bind:devicePenliftMode
       {previewLoading}
@@ -1098,6 +1117,23 @@ let deviceNextdrawModel: number = BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT
       }}
       on:profileSave={handleSaveProfile}
       on:profileDelete={handleDeleteProfile}
+      on:deviceSettingsChange={async () => {
+        // Save device preset when pen positions change
+        try {
+          const settings = currentDeviceSettings();
+          const overrides = await filesApi.getDevicePresets();
+          overrides[selectedDeviceProfile] = {
+            ...overrides[selectedDeviceProfile],
+            ...settings,
+          };
+          await filesApi.saveDevicePresets(overrides);
+          if (selectedFile) {
+            fetchPreview(selectedFile);
+          }
+        } catch (error) {
+          console.warn('Failed to save device settings:', error);
+        }
+      }}
       on:handlingChange={(e) => {
         handlingMode = e.detail;
         if (selectedFile) {

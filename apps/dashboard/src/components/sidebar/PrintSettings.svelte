@@ -18,6 +18,8 @@
   export let speedPenUp: number;
   export let penPosDown: number;
   export let penPosUp: number;
+  export let devicePenPosDown: number;
+  export let devicePenPosUp: number;
   export let devicePenliftMode: number = 1;
   export let selectedLayer: string | null = null;
   export let previewLoading: boolean = false;
@@ -38,6 +40,7 @@
     penliftChange: number;
     layerChange: string | null;
     settingsChange: void;
+    deviceSettingsChange: void;
   }>();
 
   let lastFetchedFile: string | null = null;
@@ -146,13 +149,14 @@
   };
 
   const handleCycle = async () => {
-    if (penPosDown === null || penPosDown === undefined || penPosUp === null || penPosUp === undefined) {
+    // Use device preset values for cycling
+    if (devicePenPosDown === null || devicePenPosDown === undefined || devicePenPosUp === null || devicePenPosUp === undefined) {
       pushToast('Enter both pen down and pen up positions.', { tone: 'error' });
       return;
     }
 
-    const downValue = Number(penPosDown);
-    const upValue = Number(penPosUp);
+    const downValue = Number(devicePenPosDown);
+    const upValue = Number(devicePenPosUp);
 
     if (Number.isNaN(downValue) || Number.isNaN(upValue)) {
       pushToast('Positions must be numbers.', { tone: 'error' });
@@ -181,6 +185,9 @@
       }
 
       pushToast(`Cycled pen: down=${downValue}, up=${upValue}`, { tone: 'success' });
+      
+      // Save the device preset settings after successful cycle
+      dispatch('deviceSettingsChange');
     } catch (error) {
       console.error('Error:', error);
       pushToast('Cycle request failed', { tone: 'error' });
@@ -325,8 +332,8 @@
           max="100"
           step="1"
           class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-          bind:value={penPosDown}
-          on:change={handleSettingsChange}
+          bind:value={devicePenPosDown}
+          on:change={() => dispatch('deviceSettingsChange')}
         />
       </label>
       <label class="flex flex-col text-xs gap-1">
@@ -337,8 +344,8 @@
           max="100"
           step="1"
           class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-          bind:value={penPosUp}
-          on:change={handleSettingsChange}
+          bind:value={devicePenPosUp}
+          on:change={() => dispatch('deviceSettingsChange')}
         />
       </label>
     </div>
