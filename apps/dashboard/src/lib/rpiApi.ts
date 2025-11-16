@@ -1,6 +1,6 @@
 const FALLBACK_BASE_URL = 'http://localhost:2222';
 
-const inferBaseUrl = () => {
+const inferBaseUrl = (): string => {
   if (typeof window === 'undefined') {
     return FALLBACK_BASE_URL;
   }
@@ -30,9 +30,19 @@ const inferBaseUrl = () => {
 
   // Production mode: if dashboard is on port 3131, API is on port 3333
   // Use the same hostname as the dashboard (works for both localhost and network IPs)
-  if (window.location.port === '3131') {
-    const apiUrl = `${window.location.protocol}//${window.location.hostname}:3333`;
-    console.log('[rpiApi] Production mode detected - using API URL:', apiUrl);
+  // IMPORTANT: Use window.location at runtime, not at module load time
+  const currentPort = window.location.port;
+  const currentHostname = window.location.hostname;
+  const currentProtocol = window.location.protocol;
+  
+  if (currentPort === '3131') {
+    const apiUrl = `${currentProtocol}//${currentHostname}:3333`;
+    console.log('[rpiApi] Production mode detected:', {
+      port: currentPort,
+      hostname: currentHostname,
+      protocol: currentProtocol,
+      apiUrl,
+    });
     return apiUrl;
   }
 
@@ -40,6 +50,11 @@ const inferBaseUrl = () => {
   return window.location.origin;
 };
 
+// Export as a getter function to ensure it's evaluated at runtime
+export const getApiBaseUrl = (): string => inferBaseUrl();
+
+// For backward compatibility, also export as a constant (but it will be evaluated at module load)
+// In production, this should still work because window.location is available
 export const API_BASE_URL = inferBaseUrl();
 
 // Debug logging

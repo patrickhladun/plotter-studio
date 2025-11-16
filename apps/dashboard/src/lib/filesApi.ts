@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "./rpiApi";
+import { API_BASE_URL, getApiBaseUrl } from "./rpiApi";
 
 export type FileMeta = {
   name: string;
@@ -68,7 +68,11 @@ const jsonHeaders = {
   "Content-Type": "application/json",
 };
 
-const buildUrl = (path: string) => `${API_BASE_URL}${path}`;
+const buildUrl = (path: string) => {
+  // Use runtime function to ensure we get the current window.location
+  const baseUrl = getApiBaseUrl();
+  return `${baseUrl}${path}`;
+};
 
 const encode = (value: string) => encodeURIComponent(value);
 
