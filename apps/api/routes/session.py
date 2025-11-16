@@ -73,11 +73,10 @@ def update_session_state(state: SessionStateRequest) -> dict[str, Any]:
     """Update the session state (for syncing across devices)."""
     current_state = _load_session_state()
     
-    # Update only the fields that are provided
-    if state.selected_file is not None:
-        current_state["selected_file"] = state.selected_file
-    if state.selected_layer is not None:
-        current_state["selected_layer"] = state.selected_layer
+    # Always update fields - allow None/null values to be set explicitly
+    # This allows "All layers" selection to set selected_layer back to None
+    current_state["selected_file"] = state.selected_file
+    current_state["selected_layer"] = state.selected_layer  # Can be None for "All layers"
     
     current_state["last_updated"] = time.time()
     

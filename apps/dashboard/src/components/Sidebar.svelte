@@ -285,25 +285,6 @@ let deviceNextdrawModel: number = BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT
     p_up: penPosUp,
   });
 
-  const buildPlotPayload = (): PlotSettings => {
-    const device = currentDeviceSettings();
-    const penliftValue = Number.isFinite(Number(device.penlift)) ? Number(device.penlift) : 1;
-    // Always use deviceNextdrawModel state variable (it's the source of truth)
-    // Validate it's a valid model number, otherwise use default
-    const modelNumber = (deviceNextdrawModel >= 1 && deviceNextdrawModel <= 10) 
-      ? deviceNextdrawModel 
-      : DEFAULT_MODEL_NUMBER;
-    const modelName = getModelName(modelNumber);
-    return {
-      ...getPrintProfilePayload(),
-      penlift: penliftValue,
-      brushless: penliftValue === 3,
-      no_homing: Boolean(device.no_homing),
-      model: modelName, // PlotSettings still uses string for backward compatibility with API
-      layer: selectedLayer,
-    };
-  };
-
   const currentDeviceSettings = (): DeviceSettings => {
     const settings: DeviceSettings = {
     axicli_path: deviceAxicliPath || null,
@@ -317,6 +298,38 @@ let deviceNextdrawModel: number = BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT
     console.log('[currentDeviceSettings] Returning settings with model:', settings.nextdraw_model);
     return settings;
   };
+
+  const buildPlotPayload = (): PlotSettings => {
+    const device = currentDeviceSettings();
+    const penliftValue = Number.isFinite(Number(device.penlift)) ? Number(device.penlift) : 1;
+    // Always use deviceNextdrawModel state variable (it's the source of truth)
+    // Validate it's a valid model number, otherwise use default
+    const modelNumber = (deviceNextdrawModel >= 1 && deviceNextdrawModel <= 10) 
+      ? deviceNextdrawModel 
+      : DEFAULT_MODEL_NUMBER;
+    const modelName = getModelName(modelNumber);
+    const payload = {
+      ...getPrintProfilePayload(),
+      penlift: penliftValue,
+      brushless: penliftValue === 3,
+      no_homing: Boolean(device.no_homing),
+      model: modelName, // PlotSettings still uses string for backward compatibility with API
+      layer: selectedLayer,
+    };
+    console.log('[Sidebar] buildPlotPayload - selectedLayer:', selectedLayer);
+    console.log('[Sidebar] buildPlotPayload - payload.layer:', payload.layer);
+    return payload;
+  };
+
+  // Reactive plot settings that updates when any dependency changes
+  // Track all dependencies that affect plot settings
+  let currentPlotSettings: PlotSettings = buildPlotPayload();
+  $: {
+    // This reactive block will run whenever any of its dependencies change
+    // including selectedLayer, selectedFile, deviceNextdrawModel, speedPenDown, etc.
+    currentPlotSettings = buildPlotPayload();
+    console.log('[Sidebar] currentPlotSettings updated, layer:', currentPlotSettings.layer, 'selectedLayer:', selectedLayer);
+  }
 
   const handleSaveProfile = async () => {
     const trimmed = newProfileName.trim() || selectedProfile;
@@ -654,10 +667,13 @@ let deviceNextdrawModel: number = BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT
     }
     
     try {
+      // Explicitly handle null - if selectedLayer is null, send null (not undefined)
+      const layerValue = selectedLayer === null || selectedLayer === undefined ? null : selectedLayer;
       await filesApi.updateSessionState({
         selected_file: selectedFile || null,
-        selected_layer: selectedLayer || null,
+        selected_layer: layerValue,
       });
+      console.log('[Sidebar] Updated session state - selected_layer:', layerValue);
       lastSessionUpdate = Date.now() / 1000; // Convert to seconds
     } catch (error) {
       console.debug('Failed to update session state:', error);
@@ -702,7 +718,9 @@ let deviceNextdrawModel: number = BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT
     }, 300); // Debounce by 300ms
   }
   
-  $: if (selectedLayer !== undefined && !isApplyingSessionState) {
+  // Update session state when selectedLayer changes (including when it becomes null)
+  $: if (!isApplyingSessionState && selectedLayer !== undefined) {
+    console.log('[Sidebar] selectedLayer changed, will update session state:', selectedLayer);
     if (syncTimeout) {
       clearTimeout(syncTimeout);
     }
@@ -1215,7 +1233,7 @@ let deviceNextdrawModel: number = BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT
   <div class="flex-shrink-0 border-t border-neutral-600 px-4 py-3">
     <Plot
       {selectedFile}
-      plotSettings={buildPlotPayload()}
+      plotSettings={currentPlotSettings}
       {plotProgress}
       {plotElapsedSeconds}
       {plotDistanceMm}
