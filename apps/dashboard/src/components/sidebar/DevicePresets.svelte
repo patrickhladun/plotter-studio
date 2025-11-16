@@ -59,7 +59,7 @@
 <div class="space-y-4 text-xs text-neutral-200 border-t border-neutral-700 pt-4">
   <div class="space-y-2">
     <label class="flex flex-col gap-1">
-      Device preset
+      <h2 class="text-xl font-semibold mb-2 text-white">Device preset</h2>
       <select
         class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
         value={selectedDeviceProfile}

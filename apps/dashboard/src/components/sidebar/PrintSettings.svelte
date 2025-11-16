@@ -192,9 +192,9 @@
 
 {#if selectedFile}
   <div class="mt-4 border-t border-neutral-700 pt-4 space-y-3">
-    <h3 class="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+    <h2 class="text-xl font-semibold text-white">
       Print Settings
-    </h3>
+    </h2>
     <div class="space-y-1">
       <label class="flex flex-col text-xs text-neutral-300 gap-1">
         Preset

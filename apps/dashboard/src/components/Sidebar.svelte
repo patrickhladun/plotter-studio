@@ -13,8 +13,8 @@
   import { model } from '../lib/model';
   import WalkX from './actions/WalkX.svelte';
   import WalkY from './actions/WalkY.svelte';
-import PenRaise from './actions/PenRaise.svelte';
-import PenLower from './actions/PenLower.svelte';
+  import PenRaise from './actions/PenRaise.svelte';
+  import PenLower from './actions/PenLower.svelte';
   import EnableMotors from './actions/EnableMotors.svelte';
   import DisableMotors from './actions/DisableMotors.svelte';
   import WalkHome from './actions/WalkHome.svelte';
@@ -1019,12 +1019,32 @@ let deviceNextdrawModel: number = BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT
   };
 </script>
 
-<div class="text-xs text-neutral-200 bg-neutral-700 p-2 h-screen flex flex-col w-full">
-  <div class="mb-3 text-center text-sm font-semibold uppercase tracking-wide text-neutral-100 flex-shrink-0">
-    Plotter Studio
+<div class="text-xs text-neutral-200 bg-neutral-700 h-screen flex flex-col w-full">
+  <div class="flex flex-col p-4">
+    <div class="mb-3 text-center text-sm font-semibold uppercase tracking-wide text-neutral-100 flex-shrink-0">
+      Plotter Studio
+    </div>
+    <Plot
+      {selectedFile}
+      plotSettings={currentPlotSettings}
+      {plotProgress}
+      {plotElapsedSeconds}
+      {plotDistanceMm}
+      {previewTimeSeconds}
+      {previewDistanceMm}
+      {plotting}
+      {plotRunning}
+      {rotating}
+      {stopping}
+      on:plotStart={handlePlotStart}
+      on:plotComplete={(e) => handlePlotComplete(e.detail)}
+      on:plotError={(e) => handlePlotError(e.detail)}
+      on:statusPoll={pollStatus}
+      on:stopPlot={handleStopPlot}
+    />
   </div>
 
-  <div class="flex-1 min-w-0 space-y-4 px-4 py-3 overflow-y-auto">
+  <div class="flex-1 min-w-0 space-y-4 px-4 py-3 overflow-y-auto bg-neutral-800">
     <UploadImage
       {files}
       {selectedFile}
@@ -1208,46 +1228,24 @@ let deviceNextdrawModel: number = BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT
     />
 
     <!-- Manual Controls -->
-    <div class="space-y-3 border-t border-neutral-700">
-          <div class="py-4 border-b border-neutral-600 text-xs text-neutral-200">
-            <h2 class="font-semibold mb-2 text-sm text-white">Manual Controls</h2>
-            <div class="flex flex-wrap gap-2">
-              <PenRaise />
-              <PenLower />
-              <EnableMotors />
-              <DisableMotors />
-              <WalkHome />
-            </div>
-          </div>
-          <div class="py-4 border-b border-neutral-600 text-xs text-neutral-200">
-            <h2 class="font-semibold mb-2 text-sm text-white">Move Pen</h2>
-            <div class="space-y-2">
-              <WalkX />
-              <WalkY />
-            </div>
-          </div>
+    <div class="py-4 border-t border-neutral-700">
+      <div class="text-xs text-neutral-200 mb-2">
+        <h2 class="font-semibold mb-2 text-white">Manual Controls</h2>
+        <div class="flex flex-wrap gap-2">
+          <PenRaise />
+          <PenLower />
+          <EnableMotors />
+          <DisableMotors />
+          <WalkHome />
         </div>
+      </div>
+      <div class="text-xs text-neutral-200">
+        <h2 class="font-semibold mb-2 text-sm text-white">Move Pen</h2>
+        <div class="space-y-2">
+          <WalkX />
+          <WalkY />
+        </div>
+      </div>
     </div>
-
-  <!-- Plot section fixed at bottom -->
-  <div class="flex-shrink-0 border-t border-neutral-600 px-4 py-3">
-    <Plot
-      {selectedFile}
-      plotSettings={currentPlotSettings}
-      {plotProgress}
-      {plotElapsedSeconds}
-      {plotDistanceMm}
-      {previewTimeSeconds}
-      {previewDistanceMm}
-      {plotting}
-      {plotRunning}
-      {rotating}
-      {stopping}
-      on:plotStart={handlePlotStart}
-      on:plotComplete={(e) => handlePlotComplete(e.detail)}
-      on:plotError={(e) => handlePlotError(e.detail)}
-      on:statusPoll={pollStatus}
-      on:stopPlot={handleStopPlot}
-    />
   </div>
 </div>
