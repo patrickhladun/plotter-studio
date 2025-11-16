@@ -289,6 +289,13 @@ export const filesApi = {
       headers: jsonHeaders,
       body: JSON.stringify(config),
     }),
+  getSessionState: () => request<{ selected_file?: string | null; selected_layer?: string | null; last_updated?: number | null }>('/session/state'),
+  updateSessionState: (state: { selected_file?: string | null; selected_layer?: string | null }) =>
+    request<{ ok?: boolean; message?: string }>('/session/state', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify(state),
+    }),
   // Debug helper to test API connectivity
   testConnection: async () => {
     console.log('[filesApi] Testing API connection...');

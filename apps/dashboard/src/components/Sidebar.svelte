@@ -543,15 +543,113 @@
   };
 
 
+  let lastSessionUpdate: number | null = null;
+  let sessionPollInterval: ReturnType<typeof setInterval> | null = null;
+  let isApplyingSessionState = false;
+
+  const pollSessionState = async () => {
+    try {
+      const state = await filesApi.getSessionState();
+      const serverUpdateTime = state?.last_updated || 0;
+      
+      // Only apply if the server state is newer than our last update
+      if (serverUpdateTime && (!lastSessionUpdate || serverUpdateTime > lastSessionUpdate)) {
+        isApplyingSessionState = true;
+        
+        // Update selected file if different
+        if (state.selected_file !== undefined && state.selected_file !== selectedFile) {
+          if (state.selected_file && files.some((f) => f.name === state.selected_file)) {
+            selectedFile = state.selected_file;
+            renameValue = state.selected_file;
+            requestFullPreview(state.selected_file);
+          } else if (!state.selected_file) {
+            selectedFile = '';
+            renameValue = '';
+            dispatch('preview', '');
+            clearPreview();
+          }
+        }
+        
+        // Update selected layer if different
+        if (state.selected_layer !== undefined && state.selected_layer !== selectedLayer) {
+          selectedLayer = state.selected_layer;
+          if (selectedFile) {
+            fetchPreview(selectedFile);
+            previewFile(selectedFile);
+          }
+        }
+        
+        isApplyingSessionState = false;
+        lastSessionUpdate = serverUpdateTime;
+      }
+    } catch (error) {
+      // Silently fail - session sync is optional
+      console.debug('Session state poll failed:', error);
+    }
+  };
+
+  const updateSessionState = async () => {
+    if (isApplyingSessionState) {
+      return; // Don't update server while applying server state
+    }
+    
+    try {
+      await filesApi.updateSessionState({
+        selected_file: selectedFile || null,
+        selected_layer: selectedLayer || null,
+      });
+      lastSessionUpdate = Date.now() / 1000; // Convert to seconds
+    } catch (error) {
+      console.debug('Failed to update session state:', error);
+    }
+  };
+
   onMount(() => {
-    fetchFiles();
+    // Load initial session state first, then fetch files
+    (async () => {
+      await pollSessionState();
+      await fetchFiles();
+    })();
+    
     pollStatus();
     loadProfiles(true);
     loadDeviceProfiles(true);
+    
+    // Start session state polling (every 2 seconds)
+    sessionPollInterval = setInterval(pollSessionState, 2000);
+    
+    return () => {
+      if (sessionPollInterval) {
+        clearInterval(sessionPollInterval);
+      }
+      if (syncTimeout) {
+        clearTimeout(syncTimeout);
+      }
+    };
   });
 
   $: selectedMeta = files.find((file) => file.name === selectedFile);
   $: selectedDimensions = describeDimensions(selectedMeta);
+
+  // Sync state changes to server (debounced to avoid too many updates)
+  let syncTimeout: ReturnType<typeof setTimeout> | null = null;
+  $: if (selectedFile !== undefined && !isApplyingSessionState) {
+    if (syncTimeout) {
+      clearTimeout(syncTimeout);
+    }
+    syncTimeout = setTimeout(() => {
+      updateSessionState();
+    }, 300); // Debounce by 300ms
+  }
+  
+  $: if (selectedLayer !== undefined && !isApplyingSessionState) {
+    if (syncTimeout) {
+      clearTimeout(syncTimeout);
+    }
+    syncTimeout = setTimeout(() => {
+      updateSessionState();
+    }, 300); // Debounce by 300ms
+  }
 
   const handlePlotStart = () => {
     plotting = true;
