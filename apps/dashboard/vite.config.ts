@@ -81,6 +81,18 @@ export default defineConfig({
         secure: false,
         ws: false,
       },
+      "/settings": {
+        target: `http://${apiHost}:${apiPort}`,
+        changeOrigin: true,
+        secure: false,
+        ws: false,
+      },
+      "/session": {
+        target: `http://${apiHost}:${apiPort}`,
+        changeOrigin: true,
+        secure: false,
+        ws: false,
+      },
     },
   },
   preview: {

@@ -151,7 +151,6 @@ def preview_file(
     handling: int = Query(1, ge=1),
     speed: int = Query(70, ge=1),
     penlift: int | None = Query(None, ge=1, le=3),
-    model: str | None = Query(None),
 ):
     safe_name = _sanitize_filename(filename)
     target = DATA_DIR / safe_name
@@ -165,7 +164,6 @@ def preview_file(
         handling=handling,
         speed=speed,
         penlift=penlift_value,
-        model=model,
     )
 
     # Fall back to intrinsic SVG distance if nextdraw preview isn't available.
@@ -232,6 +230,8 @@ def plot_file(filename: str, request: PlotRequest):
     if not target.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
+    logger.info("Plot request received: layer='%s'", request.layer)
+
     return _start_plot_from_path(
         svg_source=target,
         page=request.page,
@@ -243,7 +243,6 @@ def plot_file(filename: str, request: PlotRequest):
         speed=request.speed,
         penlift=request.penlift_value,
         no_homing=request.no_homing,
-        model=request.model,
         layer=request.layer,
         original_name=safe_name,
     )

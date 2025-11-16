@@ -9,7 +9,6 @@ JOB = {
     "end_time": None,
     "distance_mm": None,
     "error": None,
-    "model": None,  # Store the model used for the current/last plot
 }
 
 # Session state for synchronizing dashboard across multiple devices

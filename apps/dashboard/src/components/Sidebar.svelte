@@ -2,7 +2,6 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import {
     filesApi,
-    type DeviceConfig,
     type DeviceSettings,
     type FileMeta,
     type PlotSettings,
@@ -36,10 +35,11 @@
     'Bantam Tools NextDraw™ 2234',
   ];
 
-  const PRINT_STORAGE_KEY = 'plotterstudio.printPresets';
-  const DEVICE_STORAGE_KEY = 'plotterstudio.devicePresets';
+  // Settings are now stored on the server in JSON files, not in browser localStorage
+  // Removed localStorage functions - all settings now use API endpoints
 
-  const readLocalPresets = <T>(key: string): Record<string, Partial<T>> => {
+  // Legacy unused function (kept for reference, will be removed)
+  const readLocalPresets_UNUSED = <T>(key: string): Record<string, Partial<T>> => {
     if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
       return {};
     }
@@ -58,7 +58,8 @@
     return {};
   };
 
-  const writeLocalPresets = <T>(key: string, data: Record<string, Partial<T>>) => {
+  // Legacy unused function (kept for reference, will be removed)
+  const writeLocalPresets_UNUSED = <T>(key: string, data: Record<string, Partial<T>>) => {
     if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
       return;
     }
@@ -135,14 +136,14 @@
     DEVICE_DEFAULTS,
     {},
     BASE_DEVICE_SETTINGS,
-    'Default Device'
+    'Default Preset'
   );
   $: availableDeviceProfiles =
     deviceProfiles.length > 0
       ? deviceProfiles
-      : mergeProfiles(DEVICE_DEFAULTS, {}, BASE_DEVICE_SETTINGS, 'Default Device');
+      : mergeProfiles(DEVICE_DEFAULTS, {}, BASE_DEVICE_SETTINGS, 'Default Preset');
   let selectedDeviceProfile: string =
-    deviceProfiles.find((profile) => profile.name === 'Default Device')?.name ?? 'Default Device';
+    deviceProfiles.find((profile) => profile.name === 'Default Preset')?.name ?? 'Default Preset';
   let newDeviceName = '';
 
   let handlingMode = BASE_PLOT_SETTINGS.handling ?? 1;
@@ -152,15 +153,13 @@
   let penPosDown = BASE_PLOT_SETTINGS.p_down;
   let penPosUp = BASE_PLOT_SETTINGS.p_up;
   let selectedLayer: string | null = null;
-  let devicePenliftMode = BASE_DEVICE_SETTINGS.penlift ?? 1;
-  let deviceNoHoming = BASE_DEVICE_SETTINGS.no_homing ?? false;
-  let deviceHost = BASE_DEVICE_SETTINGS.host ?? 'localhost';
-  let devicePort = BASE_DEVICE_SETTINGS.port ?? 2222;
-  let deviceAxicliPath = BASE_DEVICE_SETTINGS.axicli_path ?? '';
-  let deviceHomeOffsetX = BASE_DEVICE_SETTINGS.home_offset_x ?? 0;
-  let deviceHomeOffsetY = BASE_DEVICE_SETTINGS.home_offset_y ?? 0;
-  let deviceNotes = BASE_DEVICE_SETTINGS.notes ?? '';
-  let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS[0];
+let devicePenliftMode = BASE_DEVICE_SETTINGS.penlift ?? 1;
+let deviceNoHoming = BASE_DEVICE_SETTINGS.no_homing ?? false;
+let deviceAxicliPath = BASE_DEVICE_SETTINGS.axicli_path ?? '';
+let deviceHomeOffsetX = BASE_DEVICE_SETTINGS.home_offset_x ?? 0;
+let deviceHomeOffsetY = BASE_DEVICE_SETTINGS.home_offset_y ?? 0;
+let deviceNotes = BASE_DEVICE_SETTINGS.notes ?? '';
+let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS[0];
 
 
 
@@ -242,8 +241,19 @@
 
   const loadProfiles = async (initial = false) => {
     try {
-      const overrides = readLocalPresets<PlotSettings>(PRINT_STORAGE_KEY);
+      // Load presets from server
+      const overrides = await filesApi.getPrintPresets();
       plotProfiles = mergeProfiles(PRINT_DEFAULTS, overrides, BASE_PLOT_SETTINGS, 'AxiDraw');
+      
+      // Load selected profile from server
+      const savedProfiles = await filesApi.getSelectedProfiles();
+      if (savedProfiles.printProfile) {
+        const hasSavedProfile = plotProfiles.some((profile) => profile.name === savedProfiles.printProfile);
+        if (hasSavedProfile) {
+          selectedProfile = savedProfiles.printProfile!;
+        }
+      }
+      
       const hasSelection = plotProfiles.some((profile) => profile.name === selectedProfile);
       if (!hasSelection) {
         selectedProfile =
@@ -276,27 +286,41 @@
   const buildPlotPayload = (): PlotSettings => {
     const device = currentDeviceSettings();
     const penliftValue = Number.isFinite(Number(device.penlift)) ? Number(device.penlift) : 1;
+    // Always use deviceNextdrawModel state variable (it's the source of truth)
+    // Validate it's in the list, otherwise use default
+    const modelValue = (deviceNextdrawModel && NEXTDRAW_MODELS.includes(deviceNextdrawModel)) 
+      ? deviceNextdrawModel 
+      : NEXTDRAW_MODELS[0];
+    console.log('[buildPlotPayload] deviceNextdrawModel state:', deviceNextdrawModel);
+    console.log('[buildPlotPayload] Device model from settings:', device.nextdraw_model);
+    console.log('[buildPlotPayload] Final model being used:', modelValue);
+    console.log('[buildPlotPayload] Model is in NEXTDRAW_MODELS:', NEXTDRAW_MODELS.includes(modelValue));
+    if (modelValue !== deviceNextdrawModel) {
+      console.warn('[buildPlotPayload] Model mismatch! State:', deviceNextdrawModel, 'Using:', modelValue);
+    }
     return {
       ...getPrintProfilePayload(),
       penlift: penliftValue,
       brushless: penliftValue === 3,
       no_homing: Boolean(device.no_homing),
-      model: device.nextdraw_model || NEXTDRAW_MODELS[0],
+      model: modelValue,
       layer: selectedLayer,
     };
   };
 
-  const currentDeviceSettings = (): DeviceSettings => ({
-    host: deviceHost || null,
-    port: Number.isFinite(Number(devicePort)) ? Number(devicePort) : null,
+  const currentDeviceSettings = (): DeviceSettings => {
+    const settings: DeviceSettings = {
     axicli_path: deviceAxicliPath || null,
     home_offset_x: Number.isFinite(Number(deviceHomeOffsetX)) ? Number(deviceHomeOffsetX) : 0,
     home_offset_y: Number.isFinite(Number(deviceHomeOffsetY)) ? Number(deviceHomeOffsetY) : 0,
     notes: deviceNotes || null,
     penlift: devicePenliftMode,
     no_homing: deviceNoHoming,
-    nextdraw_model: deviceNextdrawModel,
-  });
+      nextdraw_model: deviceNextdrawModel || null,
+    };
+    console.log('[currentDeviceSettings] Returning settings with model:', settings.nextdraw_model);
+    return settings;
+  };
 
   const handleSaveProfile = async () => {
     const trimmed = newProfileName.trim() || selectedProfile;
@@ -306,11 +330,12 @@
     }
     try {
       const saved = getPrintProfilePayload();
-      const overrides = readLocalPresets<PlotSettings>(PRINT_STORAGE_KEY);
+      const overrides = await filesApi.getPrintPresets();
       overrides[trimmed] = saved;
-      writeLocalPresets(PRINT_STORAGE_KEY, overrides);
+      await filesApi.savePrintPresets(overrides);
       selectedProfile = trimmed;
       newProfileName = '';
+      await saveSelectedProfiles(undefined, trimmed);
       pushToast(`Saved settings "${trimmed}"`, { tone: 'success' });
       await loadProfiles();
     } catch (error) {
@@ -327,11 +352,12 @@
       return;
     }
     try {
-      const overrides = readLocalPresets<PlotSettings>(PRINT_STORAGE_KEY);
+      const overrides = await filesApi.getPrintPresets();
       delete overrides[profile.name];
-      writeLocalPresets(PRINT_STORAGE_KEY, overrides);
+      await filesApi.savePrintPresets(overrides);
       pushToast(`Deleted settings "${profile.name}"`, { tone: 'success' });
       selectedProfile = 'AxiDraw';
+      await saveSelectedProfiles(undefined, 'AxiDraw');
       await loadProfiles(true);
     } catch (error) {
       console.error('Failed to delete settings', error);
@@ -363,10 +389,17 @@
     const value = target ? Number(target.value) : devicePenliftMode;
     devicePenliftMode = Number.isNaN(value) ? devicePenliftMode : value;
     
-    // If on Default Device preset, save the change to config file
-    if (selectedDeviceProfile === 'Default Device') {
+    // Save to server when settings change
+    try {
       const settings = currentDeviceSettings();
-      await saveDeviceConfig(selectedDeviceProfile, settings);
+      const overrides = await filesApi.getDevicePresets();
+      overrides[selectedDeviceProfile] = {
+        ...overrides[selectedDeviceProfile],
+        ...settings,
+      };
+      await filesApi.saveDevicePresets(overrides);
+    } catch (error) {
+      console.warn('Failed to save device settings:', error);
     }
     
     if (selectedFile) {
@@ -387,10 +420,17 @@
     const target = event.currentTarget as HTMLSelectElement | null;
     deviceNextdrawModel = target?.value || NEXTDRAW_MODELS[0];
     
-    // If on Default Device preset, save the change to config file
-    if (selectedDeviceProfile === 'Default Device') {
+    // Save to server when settings change
+    try {
       const settings = currentDeviceSettings();
-      await saveDeviceConfig(selectedDeviceProfile, settings);
+      const overrides = await filesApi.getDevicePresets();
+      overrides[selectedDeviceProfile] = {
+        ...overrides[selectedDeviceProfile],
+        ...settings,
+      };
+      await filesApi.saveDevicePresets(overrides);
+    } catch (error) {
+      console.warn('Failed to save device settings:', error);
     }
     
     if (selectedFile) {
@@ -401,8 +441,6 @@
   const applyDeviceProfile = async (name: string, skipSave = false) => {
     const profile = deviceProfiles.find((item) => item.name === name) ?? deviceProfiles[0];
     const settings = profile?.settings ?? BASE_DEVICE_SETTINGS;
-    deviceHost = settings.host ?? BASE_DEVICE_SETTINGS.host ?? 'localhost';
-    devicePort = settings.port ?? BASE_DEVICE_SETTINGS.port ?? 2222;
     deviceAxicliPath = settings.axicli_path ?? BASE_DEVICE_SETTINGS.axicli_path ?? '';
     deviceHomeOffsetX = settings.home_offset_x ?? BASE_DEVICE_SETTINGS.home_offset_x ?? 0;
     deviceHomeOffsetY = settings.home_offset_y ?? BASE_DEVICE_SETTINGS.home_offset_y ?? 0;
@@ -412,69 +450,64 @@
       typeof settings.no_homing === 'boolean'
         ? settings.no_homing
         : Boolean(BASE_DEVICE_SETTINGS.no_homing);
-    deviceNextdrawModel =
-      settings.nextdraw_model ?? BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS[0];
+    const savedModel = settings.nextdraw_model ?? BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS[0];
+    // Validate the model is in the valid list, otherwise use default
+    deviceNextdrawModel = NEXTDRAW_MODELS.includes(savedModel) ? savedModel : NEXTDRAW_MODELS[0];
+    console.log('[applyDeviceProfile] Loaded model from profile:', savedModel);
+    console.log('[applyDeviceProfile] Validated model:', deviceNextdrawModel);
     if (profile) {
       selectedDeviceProfile = profile.name;
-      // Save selected profile to config file (unless this is during initial load)
+      // Save selected profile to server (unless this is during initial load)
       if (!skipSave) {
-        await saveDeviceConfig(profile.name);
+        await saveSelectedProfiles(profile.name);
       }
     }
   };
 
-  const saveDeviceConfig = async (selectedProfile?: string, defaultOverride?: DeviceSettings | null) => {
+  // Save selected profiles to server
+  const saveSelectedProfiles = async (deviceProfile?: string, printProfile?: string) => {
     try {
-      const config: DeviceConfig = {
-        selectedDeviceProfile: selectedProfile ?? selectedDeviceProfile,
-      };
-      // Only include defaultDeviceOverride if it's explicitly provided (not undefined)
-      if (defaultOverride !== undefined) {
-        config.defaultDeviceOverride = defaultOverride;
-      }
-      await filesApi.saveDeviceConfig(config);
+      const current = await filesApi.getSelectedProfiles();
+      await filesApi.saveSelectedProfiles({
+        deviceProfile: deviceProfile ?? current.deviceProfile ?? null,
+        printProfile: printProfile ?? current.printProfile ?? null,
+      });
     } catch (error) {
-      console.error('Failed to save device config:', error);
-      // Don't show error toast for config saves - it's a background operation
+      console.warn('Failed to save selected profiles:', error);
     }
   };
 
   const loadDeviceProfiles = async (initial = false) => {
     try {
-      // Load config from file
-      let config: DeviceConfig | null = null;
-      try {
-        config = await filesApi.getDeviceConfig();
-      } catch (error) {
-        console.warn('Failed to load device config from file:', error);
-      }
-
-      // Apply defaultDeviceOverride to DEVICE_DEFAULTS if present
+      // Load presets from server
+      const overrides = await filesApi.getDevicePresets();
+      
+      // Apply overrides to DEVICE_DEFAULTS
       let effectiveDefaults = { ...DEVICE_DEFAULTS };
-      if (config?.defaultDeviceOverride) {
-        effectiveDefaults['Default Device'] = {
-          ...effectiveDefaults['Default Device'],
-          ...config.defaultDeviceOverride,
+      if (overrides['Default Preset']) {
+        effectiveDefaults['Default Preset'] = {
+          ...effectiveDefaults['Default Preset'],
+          ...overrides['Default Preset'],
         };
       }
-
-      const overrides = readLocalPresets<DeviceSettings>(DEVICE_STORAGE_KEY);
-      deviceProfiles = mergeProfiles(effectiveDefaults, overrides, BASE_DEVICE_SETTINGS, 'Default Device');
       
-      // Use selectedDeviceProfile from config if available
-      if (config?.selectedDeviceProfile) {
-        const hasConfigSelection = deviceProfiles.some((profile) => profile.name === config.selectedDeviceProfile);
-        if (hasConfigSelection) {
-          selectedDeviceProfile = config.selectedDeviceProfile;
+      deviceProfiles = mergeProfiles(effectiveDefaults, overrides, BASE_DEVICE_SETTINGS, 'Default Preset');
+      
+      // Load selected profile from server
+      const savedProfiles = await filesApi.getSelectedProfiles();
+      if (savedProfiles.deviceProfile) {
+        const hasSavedProfile = deviceProfiles.some((profile) => profile.name === savedProfiles.deviceProfile);
+        if (hasSavedProfile) {
+          selectedDeviceProfile = savedProfiles.deviceProfile!;
         }
       }
 
       const hasSelection = deviceProfiles.some((profile) => profile.name === selectedDeviceProfile);
       if (!hasSelection) {
         selectedDeviceProfile =
-          deviceProfiles.find((profile) => profile.name === 'Default Device')?.name ??
+          deviceProfiles.find((profile) => profile.name === 'Default Preset')?.name ??
           deviceProfiles[0]?.name ??
-          'Default Device';
+          'Default Preset';
       }
       if (initial || !hasSelection) {
         await applyDeviceProfile(selectedDeviceProfile, initial);
@@ -482,13 +515,14 @@
     } catch (error) {
       console.error('Failed to load device settings', error);
       if (deviceProfiles.length === 0) {
-        deviceProfiles = mergeProfiles(DEVICE_DEFAULTS, {}, BASE_DEVICE_SETTINGS, 'Default Device');
+        deviceProfiles = mergeProfiles(DEVICE_DEFAULTS, {}, BASE_DEVICE_SETTINGS, 'Default Preset');
         await applyDeviceProfile(deviceProfiles[0].name, true);
       }
     }
   };
 
   const handleDeviceSave = async () => {
+    // If name is empty, save to currently selected profile (usually "Default Preset")
     const trimmed = newDeviceName.trim() || selectedDeviceProfile;
     if (!trimmed) {
       pushToast('Provide a name for the device preset.', { tone: 'error' });
@@ -496,20 +530,36 @@
     }
     try {
       const settings = currentDeviceSettings();
-      const overrides = readLocalPresets<DeviceSettings>(DEVICE_STORAGE_KEY);
+      console.log('[handleDeviceSave] Saving device settings:', {
+        profile: trimmed,
+        model: settings.nextdraw_model,
+        deviceNextdrawModel,
+        allSettings: settings,
+      });
+      
+      // Validate model before saving
+      if (settings.nextdraw_model && !NEXTDRAW_MODELS.includes(settings.nextdraw_model)) {
+        console.error('[handleDeviceSave] Invalid model in settings:', settings.nextdraw_model);
+        console.error('[handleDeviceSave] Valid models:', NEXTDRAW_MODELS);
+        pushToast(`Invalid model: ${settings.nextdraw_model}`, { tone: 'error' });
+        return;
+      }
+      
+      // Save to server
+      const overrides = await filesApi.getDevicePresets();
       overrides[trimmed] = settings;
-      writeLocalPresets(DEVICE_STORAGE_KEY, overrides);
+      await filesApi.saveDevicePresets(overrides);
+      console.log('[handleDeviceSave] Saved to server:', overrides[trimmed]);
+      
       newDeviceName = '';
       selectedDeviceProfile = trimmed;
       
-      // If saving to "Default Device", also save to config file as defaultDeviceOverride
-      if (trimmed === 'Default Device') {
-        await saveDeviceConfig(trimmed, settings);
-      } else {
-        await saveDeviceConfig(trimmed);
-      }
+      // Save selected profile to server
+      await saveSelectedProfiles(trimmed);
       
+      // Reload profiles to ensure everything is in sync
       await loadDeviceProfiles();
+      console.log('[handleDeviceSave] After reload, deviceNextdrawModel:', deviceNextdrawModel);
       pushToast(`Saved device "${trimmed}"`, { tone: 'success' });
     } catch (error) {
       console.error('Failed to save device settings', error);
@@ -529,11 +579,15 @@
       return;
     }
     try {
-      const overrides = readLocalPresets<DeviceSettings>(DEVICE_STORAGE_KEY);
+      const overrides = await filesApi.getDevicePresets();
       delete overrides[profile.name];
-      writeLocalPresets(DEVICE_STORAGE_KEY, overrides);
+      await filesApi.saveDevicePresets(overrides);
+      
+      // Save selected profile
+      await saveSelectedProfiles('Default Preset');
+      
       pushToast(`Deleted device "${profile.name}"`, { tone: 'success' });
-      selectedDeviceProfile = 'Default Device';
+      selectedDeviceProfile = 'Default Preset';
       await loadDeviceProfiles(true);
     } catch (error) {
       console.error('Failed to delete device settings', error);
@@ -615,8 +669,8 @@
     loadProfiles(true);
     loadDeviceProfiles(true);
     
-    // Start session state polling (every 2 seconds)
-    sessionPollInterval = setInterval(pollSessionState, 2000);
+    // Session state polling disabled - uncomment if you need multi-device sync
+    // sessionPollInterval = setInterval(pollSessionState, 5000);
     
     return () => {
       if (sessionPollInterval) {
@@ -941,8 +995,8 @@
   };
 </script>
 
-<div class="text-xs text-neutral-200 bg-neutral-700 p-2 h-screen overflow-y-scroll">
-  <div class="mb-3 text-center text-sm font-semibold uppercase tracking-wide text-neutral-100">
+<div class="text-xs text-neutral-200 bg-neutral-700 p-2 h-screen flex flex-col">
+  <div class="mb-3 text-center text-sm font-semibold uppercase tracking-wide text-neutral-100 flex-shrink-0">
     Plotter Studio
   </div>
 
@@ -973,25 +1027,6 @@
         fetchFiles(e.detail);
       }}
       on:rotated={() => fetchFiles(selectedFile)}
-    />
-
-    <Plot
-      {selectedFile}
-      plotSettings={buildPlotPayload()}
-      {plotProgress}
-      {plotElapsedSeconds}
-      {plotDistanceMm}
-      {previewTimeSeconds}
-      {previewDistanceMm}
-      {plotting}
-      {plotRunning}
-      {rotating}
-      {stopping}
-      on:plotStart={handlePlotStart}
-      on:plotComplete={(e) => handlePlotComplete(e.detail)}
-      on:plotError={(e) => handlePlotError(e.detail)}
-      on:statusPoll={pollStatus}
-      on:stopPlot={handleStopPlot}
     />
 
     <PrintSettings
@@ -1042,9 +1077,17 @@
       }}
       on:penliftChange={async (e) => {
         devicePenliftMode = e.detail;
-        if (selectedDeviceProfile === 'Default Device') {
+        // Save to server when settings change
+        try {
           const settings = currentDeviceSettings();
-          await saveDeviceConfig(selectedDeviceProfile, settings);
+          const overrides = await filesApi.getDevicePresets();
+          overrides[selectedDeviceProfile] = {
+            ...overrides[selectedDeviceProfile],
+            ...settings,
+          };
+          await filesApi.saveDevicePresets(overrides);
+        } catch (error) {
+          console.warn('Failed to save device settings:', error);
         }
         if (selectedFile) {
           fetchPreview(selectedFile);
@@ -1062,8 +1105,6 @@
       {availableDeviceProfiles}
       bind:newDeviceName
       bind:deviceNextdrawModel
-      bind:deviceHost
-      bind:devicePort
       bind:deviceAxicliPath
       bind:deviceHomeOffsetX
       bind:deviceHomeOffsetY
@@ -1080,20 +1121,57 @@
       on:presetSave={handleDeviceSave}
       on:presetDelete={handleDeviceDelete}
       on:modelChange={async (e) => {
-        deviceNextdrawModel = e.detail;
-        if (selectedDeviceProfile === 'Default Device') {
-          const settings = currentDeviceSettings();
-          await saveDeviceConfig(selectedDeviceProfile, settings);
+        const newModel = e.detail;
+        console.log('[modelChange] New model selected:', newModel);
+        console.log('[modelChange] Is valid model?', NEXTDRAW_MODELS.includes(newModel));
+        
+        // Validate the model is in the list
+        if (!NEXTDRAW_MODELS.includes(newModel)) {
+          console.error('[modelChange] Invalid model:', newModel, 'Valid models:', NEXTDRAW_MODELS);
+          pushToast(`Invalid model selected: ${newModel}`, { tone: 'error' });
+          return;
         }
+        
+        deviceNextdrawModel = newModel;
+        
+        // Save to device profile (server)
+        try {
+          const settings = currentDeviceSettings();
+          const overrides = await filesApi.getDevicePresets();
+          overrides[selectedDeviceProfile] = {
+            ...overrides[selectedDeviceProfile],
+            ...settings,
+          };
+          await filesApi.saveDevicePresets(overrides);
+          
+          // Also update the deviceProfiles array
+          const profileIndex = deviceProfiles.findIndex((p) => p.name === selectedDeviceProfile);
+          if (profileIndex >= 0) {
+            deviceProfiles[profileIndex].settings = { ...deviceProfiles[profileIndex].settings, ...settings };
+          }
+        } catch (error) {
+          console.error('[modelChange] Failed to save model to profile:', error);
+        }
+        
+        // Settings are already saved to server above
+        
         if (selectedFile) {
           fetchPreview(selectedFile);
         }
       }}
       on:penliftChange={async (e) => {
         devicePenliftMode = e.detail;
-        if (selectedDeviceProfile === 'Default Device') {
+        // Save to server when settings change
+        try {
           const settings = currentDeviceSettings();
-          await saveDeviceConfig(selectedDeviceProfile, settings);
+          const overrides = await filesApi.getDevicePresets();
+          overrides[selectedDeviceProfile] = {
+            ...overrides[selectedDeviceProfile],
+            ...settings,
+          };
+          await filesApi.saveDevicePresets(overrides);
+        } catch (error) {
+          console.warn('Failed to save device settings:', error);
         }
         if (selectedFile) {
           fetchPreview(selectedFile);
@@ -1108,23 +1186,45 @@
 
     <!-- Manual Controls -->
     <div class="space-y-3 border-t border-neutral-700">
-      <div class="py-4 border-b border-neutral-600 text-xs text-neutral-200">
-        <h2 class="font-semibold mb-2 text-sm text-white">Manual Controls</h2>
-        <div class="flex flex-wrap gap-2">
-          <PenUp model={deviceNextdrawModel} />
-          <PenDown model={deviceNextdrawModel} />
-          <EnableMotors model={deviceNextdrawModel} />
-          <DisableMotors model={deviceNextdrawModel} />
-          <WalkHome />
+          <div class="py-4 border-b border-neutral-600 text-xs text-neutral-200">
+            <h2 class="font-semibold mb-2 text-sm text-white">Manual Controls</h2>
+            <div class="flex flex-wrap gap-2">
+              <PenUp model={deviceNextdrawModel} />
+              <PenDown model={deviceNextdrawModel} />
+              <EnableMotors model={deviceNextdrawModel} />
+              <DisableMotors model={deviceNextdrawModel} />
+              <WalkHome />
+            </div>
+          </div>
+          <div class="py-4 border-b border-neutral-600 text-xs text-neutral-200">
+            <h2 class="font-semibold mb-2 text-sm text-white">Move Pen</h2>
+            <div class="space-y-2">
+              <WalkX model={deviceNextdrawModel} />
+              <WalkY model={deviceNextdrawModel} />
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="py-4 border-b border-neutral-600 text-xs text-neutral-200">
-        <h2 class="font-semibold mb-2 text-sm text-white">Move Pen</h2>
-        <div class="space-y-2">
-          <WalkX model={deviceNextdrawModel} />
-          <WalkY model={deviceNextdrawModel} />
-        </div>
-      </div>
     </div>
+
+  <!-- Plot section fixed at bottom -->
+  <div class="flex-shrink-0 border-t border-neutral-600 px-4 py-3">
+    <Plot
+      {selectedFile}
+      plotSettings={buildPlotPayload()}
+      {plotProgress}
+      {plotElapsedSeconds}
+      {plotDistanceMm}
+      {previewTimeSeconds}
+      {previewDistanceMm}
+      {plotting}
+      {plotRunning}
+      {rotating}
+      {stopping}
+      on:plotStart={handlePlotStart}
+      on:plotComplete={(e) => handlePlotComplete(e.detail)}
+      on:plotError={(e) => handlePlotError(e.detail)}
+      on:statusPoll={pollStatus}
+      on:stopPlot={handleStopPlot}
+    />
   </div>
 </div>

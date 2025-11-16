@@ -17,6 +17,7 @@ CONFIG_FILE = DEFAULT_HOME / "config.json"
 class DeviceConfig(BaseModel):
     selectedDeviceProfile: str | None = None
     defaultDeviceOverride: dict[str, Any] | None = None
+    customPresets: dict[str, dict[str, Any]] | None = None
 
 
 def _load_config() -> dict[str, Any]:
@@ -49,6 +50,7 @@ def get_device_config() -> DeviceConfig:
     return DeviceConfig(
         selectedDeviceProfile=config.get("selectedDeviceProfile"),
         defaultDeviceOverride=config.get("defaultDeviceOverride"),
+        customPresets=config.get("customPresets"),
     )
 
 
@@ -61,8 +63,12 @@ def save_device_config(config: DeviceConfig) -> dict[str, str]:
             current_config["selectedDeviceProfile"] = config.selectedDeviceProfile
         if config.defaultDeviceOverride is not None:
             current_config["defaultDeviceOverride"] = config.defaultDeviceOverride
+        if config.customPresets is not None:
+            current_config["customPresets"] = config.customPresets
         _save_config(current_config)
-        logger.info("Device config saved: selectedProfile=%s", config.selectedDeviceProfile)
+        logger.info("Device config saved: selectedProfile=%s, customPresets=%s", 
+                   config.selectedDeviceProfile, 
+                   list(config.customPresets.keys()) if config.customPresets else None)
         return {"ok": True, "message": "Config saved"}
     except Exception as e:
         logger.exception("Error saving device config: %s", e)

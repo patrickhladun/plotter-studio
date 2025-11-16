@@ -37,7 +37,6 @@ class PlotRequest(BaseModel):
     brushless: bool = False
     penlift: int | None = None
     no_homing: bool = False
-    model: str | None = None
     layer: str | None = None
 
     @property

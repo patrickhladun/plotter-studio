@@ -1,0 +1,11 @@
+{
+  "Default Preset": {
+    "axicli_path": null,
+    "home_offset_x": 0,
+    "home_offset_y": 0,
+    "notes": null,
+    "penlift": 1,
+    "no_homing": false,
+    "nextdraw_model": "Bantam Tools NextDraw\u2122 8511 (Default)"
+  }
+}

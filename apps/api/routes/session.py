@@ -27,7 +27,7 @@ def get_session_state() -> dict[str, Any]:
 
 
 @router.post("/state")
-def update_session_state(state: SessionStateRequest) -> dict[str, str]:
+def update_session_state(state: SessionStateRequest) -> dict[str, Any]:
     """Update the session state (for syncing across devices)."""
     if state.selected_file is not None:
         SESSION_STATE["selected_file"] = state.selected_file

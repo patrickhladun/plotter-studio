@@ -5,7 +5,6 @@ from fastapi import APIRouter, Form, HTTPException
 
 from core.nextdraw import (
     _run_command,
-    _run_manual,
     _manual_response,
 )
 from core.state import JOB
@@ -34,8 +33,8 @@ def cancel():
             JOB["proc"].wait(timeout=3)
         except Exception:
             JOB["proc"].kill()
-        _run_manual("raise_pen")
-        _run_manual("disable_xy")
+        # Dashboard should handle raising pen and disabling motors if needed
+        # The cancel endpoint just stops the running process
     JOB["proc"] = None
     JOB["progress"] = None
     JOB["end_time"] = time.time()

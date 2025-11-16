@@ -23,6 +23,8 @@
     try {
       if (onPlotStart) onPlotStart();
       
+      console.log('[StartPlot] Plot settings being sent:', plotSettings);
+      console.log('[StartPlot] Model in settings:', plotSettings.model);
       const payload = await filesApi.plot(selectedFile, plotSettings);
 
       const pid = typeof payload?.pid === 'number' ? payload.pid : undefined;

@@ -6,8 +6,6 @@
   export let availableDeviceProfiles: { name: string; settings: DeviceSettings; protected?: boolean }[] = [];
   export let newDeviceName: string = '';
   export let deviceNextdrawModel: string = '';
-  export let deviceHost: string = 'localhost';
-  export let devicePort: number = 2222;
   export let deviceAxicliPath: string = '';
   export let deviceHomeOffsetX: number = 0;
   export let deviceHomeOffsetY: number = 0;
@@ -109,25 +107,6 @@
   </div>
 
   <div class="grid gap-3 sm:grid-cols-2">
-    <label class="flex flex-col gap-1">
-      <span>Host</span>
-      <input
-        type="text"
-        class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-        bind:value={deviceHost}
-        on:change={handleSettingsChange}
-      />
-    </label>
-    <label class="flex flex-col gap-1">
-      <span>Port</span>
-      <input
-        type="number"
-        min="1"
-        class="rounded bg-neutral-800 border border-neutral-500 px-2 py-1 text-neutral-100"
-        bind:value={devicePort}
-        on:change={handleSettingsChange}
-      />
-    </label>
     <label class="flex flex-col gap-1">
       <span>NextDraw/AxiCLI path</span>
       <input
