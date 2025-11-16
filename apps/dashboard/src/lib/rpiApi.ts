@@ -18,16 +18,22 @@ const inferBaseUrl = () => {
     return envOverride.trim();
   }
 
-  if (import.meta.env?.DEV) {
-    // In dev mode, always use relative paths to leverage Vite proxy
-    // This avoids CORS issues and works for both localhost and network access
-    // The Vite proxy will forward requests to the API server
+  // Check if we're in dev mode (Vite dev server)
+  const isDev = import.meta.env?.DEV === true || import.meta.env?.MODE === 'development';
+  const isProd = import.meta.env?.PROD === true || import.meta.env?.MODE === 'production';
+  
+  // In dev mode, always use relative paths to leverage Vite proxy
+  // This avoids CORS issues and works for both localhost and network access
+  if (isDev && !isProd) {
     return '';
   }
 
   // Production mode: if dashboard is on port 3131, API is on port 3333
-  if (window.location.port === '3131' && window.location.hostname !== 'localhost') {
-    return `${window.location.protocol}//${window.location.hostname}:3333`;
+  // Use the same hostname as the dashboard (works for both localhost and network IPs)
+  if (window.location.port === '3131') {
+    const apiUrl = `${window.location.protocol}//${window.location.hostname}:3333`;
+    console.log('[rpiApi] Production mode detected - using API URL:', apiUrl);
+    return apiUrl;
   }
 
   // Default: use same origin (for production when ports match or other scenarios)
