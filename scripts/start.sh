@@ -115,12 +115,18 @@ echo ""
 echo "Press Ctrl+C to stop"
 echo ""
 
+# Initialize PIDs
+API_PID=""
+DASHBOARD_PID=""
+
 # Trap to clean up background processes
 cleanup() {
     echo ""
     echo "🛑 Stopping services..."
-    kill $API_PID $DASHBOARD_PID 2>/dev/null || true
-    wait $API_PID $DASHBOARD_PID 2>/dev/null || true
+    [ -n "$API_PID" ] && kill $API_PID 2>/dev/null || true
+    [ -n "$DASHBOARD_PID" ] && kill $DASHBOARD_PID 2>/dev/null || true
+    [ -n "$API_PID" ] && wait $API_PID 2>/dev/null || true
+    [ -n "$DASHBOARD_PID" ] && wait $DASHBOARD_PID 2>/dev/null || true
     exit 0
 }
 trap cleanup SIGINT SIGTERM EXIT
@@ -147,9 +153,14 @@ if [ "$DEV_MODE" = "dev" ]; then
     UVICORN_CMD+=(
         --reload
         --reload-dir apps/api
-        --reload-exclude uploads
-        --reload-exclude uploads/*
     )
+    # Exclude uploads directory from reload watching
+    # Temporarily disable glob expansion to prevent pattern expansion
+    set -f
+    if [ -d "uploads" ]; then
+        UVICORN_CMD+=(--reload-exclude 'uploads/*')
+    fi
+    set +f
     if [ -d "rotation" ]; then
         UVICORN_CMD+=(--reload-dir rotation)
     fi
