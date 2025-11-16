@@ -679,8 +679,8 @@ let deviceNextdrawModel = BASE_DEVICE_SETTINGS.nextdraw_model ?? NEXTDRAW_MODELS
     loadProfiles(true);
     loadDeviceProfiles(true);
     
-    // Session state polling disabled - uncomment if you need multi-device sync
-    // sessionPollInterval = setInterval(pollSessionState, 5000);
+    // Start session state polling for multi-device sync (every 2 seconds)
+    sessionPollInterval = setInterval(pollSessionState, 2000);
     
     return () => {
       if (sessionPollInterval) {
