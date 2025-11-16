@@ -6,6 +6,7 @@
 
   let svgContent: string | null = null;
   let showSidebar = true;
+  let mobileSvgRef: HTMLDivElement | null = null;
 
   const handleSvgLoad = (event: CustomEvent<string>) => {
     svgContent = event.detail;
@@ -13,6 +14,24 @@
   const toggleSidebar = () => {
     showSidebar = !showSidebar;
   };
+
+  const normalizeMobileSvg = () => {
+    if (!mobileSvgRef) return;
+    const svg = mobileSvgRef.querySelector('svg');
+    if (!svg) return;
+    
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    svg.style.width = '100%';
+    svg.style.height = '100%';
+    svg.style.maxWidth = '100%';
+    svg.style.maxHeight = '100%';
+    svg.style.display = 'block';
+  };
+
+  $: if (svgContent && mobileSvgRef) {
+    // Use setTimeout to ensure DOM is updated
+    setTimeout(normalizeMobileSvg, 0);
+  }
 </script>
 
 <div class="font-sans flex min-h-screen overflow-hidden">
@@ -33,7 +52,31 @@
       showSidebar ? 'hidden md:flex' : 'flex'
     }`}
   >
-    <CanvasWorkspace {svgContent} />
+    <!-- Desktop: Full canvas with rulers and zoom -->
+    <div class="hidden md:flex flex-1">
+      <CanvasWorkspace {svgContent} />
+    </div>
+    <!-- Mobile: Simple fitted image -->
+    <div class="md:hidden flex-1 bg-neutral-200 flex items-center justify-center p-4">
+      {#if svgContent}
+        <div class="w-full h-full flex items-center justify-center mobile-svg-container" bind:this={mobileSvgRef}>
+          {@html svgContent}
+        </div>
+      {:else}
+        <p class="text-neutral-500 text-sm">No SVG loaded</p>
+      {/if}
+    </div>
   </main>
   <ToastHost />
 </div>
+
+<style>
+  :global(.mobile-svg-container svg) {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+</style>
