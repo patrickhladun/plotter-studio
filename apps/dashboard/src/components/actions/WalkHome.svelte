@@ -2,13 +2,15 @@
   import Button from '../Button/Button.svelte';
   import { executeCommand } from '../../lib/commandExecutor';
   import { pushToast } from '../../lib/toastStore';
+  import { getFlag } from '../../lib/model';
 
   let isMoving = false;
 
   const handleWalkHome = async () => {
     try {
       isMoving = true;
-      const command = 'nextdraw -m utility -M walk_home';
+      const parts = ['nextdraw', getFlag(), '-m', 'utility', '-M', 'walk_home'].filter(Boolean);
+      const command = parts.join(' ');
       const result = await executeCommand(command, 'Walk home');
 
       if (!result.success) {
