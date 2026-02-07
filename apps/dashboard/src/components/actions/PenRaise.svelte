@@ -2,14 +2,15 @@
   import Button from '../Button/Button.svelte';
   import { executeCommand } from '../../lib/commandExecutor';
   import { pushToast } from '../../lib/toastStore';
-  import { getFlag } from '../../lib/model';
+  import { getFlag, getPenFlags } from '../../lib/model';
 
   let penBusy = false;
 
   const handlePenRaise = async () => {
     try {
       penBusy = true;
-      const parts = ['nextdraw', getFlag(), '-m', 'utility', '-M', 'raise_up'].filter(Boolean);
+      const penFlags = getPenFlags();
+      const parts = ['nextdraw', getFlag(), ...penFlags, '-m', 'utility', '-M', 'raise_up'].filter(Boolean);
       const command = parts.join(' ');
       const result = await executeCommand(command, 'Pen raise');
 

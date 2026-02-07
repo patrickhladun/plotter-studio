@@ -31,6 +31,42 @@ export const model = {
 };
 
 /**
+ * Device and print settings store
+ * Centralized source for pen positions and other settings used by action components
+ */
+export interface DevicePrintSettings {
+  p_down: number;  // Pen down position (0-100)
+  p_up: number;    // Pen up position (0-100)
+  penlift: number; // Pen lift mode (1-3)
+  s_down: number;  // Speed pen down
+  s_up: number;    // Speed pen up
+  handling: number; // Handling mode
+  speed: number;    // Overall speed
+}
+
+const defaultSettings: DevicePrintSettings = {
+  p_down: 40,
+  p_up: 70,
+  penlift: 1,
+  s_down: 30,
+  s_up: 70,
+  handling: 1,
+  speed: 70,
+};
+
+const settingsStore = writable<DevicePrintSettings>(defaultSettings);
+
+export const settings = {
+  subscribe: settingsStore.subscribe,
+  set: (newSettings: DevicePrintSettings) => {
+    settingsStore.set(newSettings);
+  },
+  update: (fn: (current: DevicePrintSettings) => DevicePrintSettings) => {
+    settingsStore.update(fn);
+  },
+};
+
+/**
  * Get model flag string (e.g., "-L8") for use in command building
  * Returns empty string if model is invalid
  * Uses the current store value by default
@@ -42,6 +78,36 @@ function getFlag(): string {
     return "";
   }
   return `-L${num}`;
+}
+
+/**
+ * Get current pen positions from settings store
+ * @returns Object with p_down and p_up values
+ */
+export function getPenPositions(): { p_down: number; p_up: number } {
+  const current = get(settingsStore);
+  return {
+    p_down: current.p_down,
+    p_up: current.p_up,
+  };
+}
+
+/**
+ * Get pen position flags for use in command building
+ * @returns Array of command flags like ["--pen_pos_down", "40", "--pen_pos_up", "70"]
+ */
+export function getPenFlags(): string[] {
+  const { p_down, p_up } = getPenPositions();
+  const flags: string[] = [];
+
+  if (Number.isFinite(p_down)) {
+    flags.push("--pen_pos_down", String(p_down));
+  }
+  if (Number.isFinite(p_up)) {
+    flags.push("--pen_pos_up", String(p_up));
+  }
+
+  return flags;
 }
 
 export { getFlag };

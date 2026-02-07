@@ -10,7 +10,7 @@
   import { DEVICE_DEFAULTS, BASE_DEVICE_SETTINGS } from '../defaults/devicePresets';
   import { showCommandToast, pushToast } from '../lib/toastStore';
   import { NEXTDRAW_MODELS, NEXTDRAW_MODEL_NUMBERS, NEXTDRAW_MODEL_MAP, DEFAULT_MODEL_NUMBER, getModelNumber, getModelName } from '../lib/nextdrawCommands';
-  import { model } from '../lib/model';
+  import { model, settings } from '../lib/model';
   import WalkX from './actions/WalkX.svelte';
   import WalkY from './actions/WalkY.svelte';
   import PenRaise from './actions/PenRaise.svelte';
@@ -338,12 +338,23 @@ let deviceNextdrawModel: number = BASE_DEVICE_SETTINGS.nextdraw_model ?? DEFAULT
     const _ = devicePenPosDown, __ = devicePenPosUp, ___ = selectedLayer, ____ = selectedFile, _____ = deviceNextdrawModel;
     const ______ = speedPenDown, _______ = speedPenUp, ________ = handlingMode, _________ = speedSetting;
     const __________ = devicePenliftMode, ___________ = deviceNoHoming;
-    
+
     // This reactive block will run whenever any of its dependencies change
     currentPlotSettings = buildPlotPayload();
     console.log('[Sidebar] currentPlotSettings updated, layer:', currentPlotSettings.layer, 'selectedLayer:', selectedLayer);
     console.log('[Sidebar] currentPlotSettings - pen positions:', { p_down: currentPlotSettings.p_down, p_up: currentPlotSettings.p_up });
     console.log('[Sidebar] devicePenPosDown:', devicePenPosDown, 'devicePenPosUp:', devicePenPosUp);
+
+    // Update settings store so action components have access to current values
+    settings.set({
+      p_down: devicePenPosDown,
+      p_up: devicePenPosUp,
+      penlift: devicePenliftMode,
+      s_down: speedPenDown,
+      s_up: speedPenUp,
+      handling: handlingMode,
+      speed: speedSetting,
+    });
   }
 
   const handleSaveProfile = async () => {
